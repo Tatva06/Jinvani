@@ -1,0 +1,33 @@
+# ──────────────────────────────────────────────
+# Mobile (Expo / React Native)
+# ──────────────────────────────────────────────
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/npm-debug.log
+mobile/.env
+mobile/.env.local
+
+# ──────────────────────────────────────────────
+# Backend (Python / FastAPI)
+# ──────────────────────────────────────────────
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/venv/
+backend/env/
+backend/.env
+backend/.env.local
+backend/*.sqlite3
+
+# ──────────────────────────────────────────────
+# OS / Editor
+# ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# IDE agent configs
+mobile/.claude/
