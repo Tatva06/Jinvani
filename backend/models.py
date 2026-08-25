@@ -14,6 +14,8 @@ class CardOut(BaseModel):
     status: str
     content: dict[str, Any]
     original_verse: dict[str, Any] | None = None
+    deck_title: str | None = None
+    decks: dict[str, Any] | None = None
 
 
 class FeedResponse(BaseModel):
