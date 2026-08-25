@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Only needed for gitleaks' hosted "Keygen" reporting on private
+          # repos — safe to leave unset for a public repo or if you don't
+          # have a license. The scan itself (and failing the job on a
+          # finding) does not require this secret.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      - name: Explicitly flag the known historical leak if it reappears
+        if: failure()
+        run: |
+          echo "::error::gitleaks found a secret. If this includes the string \
+          'kwsahtflzaynbxlavfiv' or a Supabase JWT/sb_secret_ key, this is a \
+          REGRESSION of the credential leak documented in AUDIT_REPORT.md \
+          (backend/.env.example, originally caught 2026-08-24). Do not just \
+          strip the line and re-push — rotate the credential first."
+
+  mobile:
+    name: Mobile (typecheck + lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx expo lint
+
+  backend:
+    name: Backend (install + compile sanity check)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Byte-compile sanity check
+        run: python -m py_compile $(find . -name "*.py" -not -path "./venv/*")
+
+  ml_pipeline:
+    name: ML Pipeline (install + compile sanity check)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ml_pipeline
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: ml_pipeline/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Byte-compile sanity check
+        run: python -m py_compile $(find . -name "*.py" -not -path "./venv/*")

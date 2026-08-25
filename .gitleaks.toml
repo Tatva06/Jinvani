@@ -1,0 +1,34 @@
+title = "jinvani gitleaks config"
+
+# Extend gitleaks' default ruleset (provider-specific patterns, generic
+# high-entropy secrets, JWTs, etc.) and add one explicit rule for the
+# credential pair that was previously committed in backend/.env.example
+# (see AUDIT_REPORT.md / AUDIT_REPORT_v2.md) so a regression of that
+# specific leak is flagged by name instead of relying on the generic
+# entropy/JWT rules to happen to catch it.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "jinvani-known-leaked-supabase-ref"
+description = "Historical leaked Supabase project ref (kwsahtflzaynbxlavfiv) — previously committed in backend/.env.example. If this fires, the same credential pair has resurfaced; rotate immediately, don't just remove the line."
+regex = '''kwsahtflzaynbxlavfiv'''
+tags = ["jinvani", "supabase", "known-incident"]
+
+[[rules]]
+id = "jinvani-supabase-anon-jwt"
+description = "Supabase anon/service JWT pattern (sb-style or legacy eyJ... JWT) committed in a tracked file — should only ever live in a gitignored .env."
+regex = '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'''
+tags = ["jinvani", "supabase", "jwt"]
+
+[[rules]]
+id = "jinvani-supabase-secret-key"
+description = "New-format Supabase secret/service-role key (sb_secret_...) — bypasses RLS entirely, must never be committed."
+regex = '''sb_secret_[A-Za-z0-9_-]{20,}'''
+tags = ["jinvani", "supabase", "service-role"]
+
+[[rules]]
+id = "jinvani-gemini-api-key"
+description = "Google Gemini API key pattern committed in a tracked file — should only live in ml_pipeline/.env."
+regex = '''AQ\.[A-Za-z0-9_-]{30,}'''
+tags = ["jinvani", "gemini"]
