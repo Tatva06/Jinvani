@@ -1,0 +1,24 @@
+# Secrets — never committed
+.env
+
+# Isolated venv for this pipeline (separate from backend/venv)
+venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime output directories
+dry_run/
+flagged/
+
+# Per-run logs
+run_log.jsonl
+.llm_call_budget.json
+
+# Source book PDFs — don't commit copies of published/licensed text into
+# git history. Was NOT excluded before; a 2.3MB book was about to be
+# staged. Store source PDFs outside the repo, or in a gitignored
+# /sources/ subfolder, and keep only the pipeline code under version control.
+*.pdf

@@ -1,0 +1,20 @@
+llm:
+  provider: gemini
+  model: models/gemini-3.6-flash # gemini-2.5-flash retired for new users as of Aug 2026
+  temperature_concept: 0.4 # some latitude for modern-takeaway phrasing
+  temperature_verse: 0.0 # zero — literal translation only, no creativity
+  daily_call_budget:
+    15 # CHECK YOUR LIVE QUOTA in AI Studio and set this below it —
+    # this account's gemini-3.6-flash free-tier RPD was seen at 20;
+    # 15 leaves headroom so the app itself stops before Google's 429 does
+
+word_bounds:
+  en: [60, 140]
+  hi: [50, 110]
+  gu: [50, 100]
+
+verse_regex: "Sutra\\s+\\d+\\.\\d+" # override per book with --verse-regex if the marker differs
+
+validation:
+  verse_similarity_threshold: 0.85 # below this, flag as likely rewritten rather than preserved
+  min_chunk_chars: 50 # discard scraps too short to be a real chunk
