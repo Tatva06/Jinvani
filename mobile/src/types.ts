@@ -12,6 +12,8 @@ export interface CardContent {
 }
 
 // ─── Seed Card ────────────────────────────────────────────────────────────────
+export type CardType = 'summary' | 'chunked_verse';
+
 export interface SeedCard {
   /** Unique stable identifier */
   id: string;
@@ -21,6 +23,9 @@ export interface SeedCard {
   cardIndex: string;
   /** Scholarly citation: author, chapter, verse */
   citation: string;
+  /** Mirrors backend cards.card_type — 'chunked_verse' cards carry an
+   * original-language source verse; 'summary' cards don't. */
+  cardType?: CardType;
   /** Multilingual content keyed by language */
   content: Record<Language, CardContent>;
   /** Optional original verse in classical script */
