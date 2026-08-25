@@ -1,0 +1,85 @@
+"""GET /api/v1/search — public, no auth required.
+
+ILIKE-level substring search over card content (title/body in the
+requested language, falling back to en) and deck titles. No new search
+infrastructure — two simple queries merged in Python. Only ever
+searches status="approved" cards, same as /feed.
+"""
+
+from __future__ import annotations
+
+import logging
+from fastapi import APIRouter, HTTPException, Query, Request, status
+from models import CardOut, FeedResponse
+
+logger = logging.getLogger("jinvani.search")
+router = APIRouter()
+
+VALID_LANGS = {"en", "hi", "gu"}
+
+
+@router.get("/search", response_model=FeedResponse, summary="Search cards by content or deck title")
+async def search_cards(
+    request: Request,
+    q: str = Query(..., min_length=1, description="Search substring."),
+    lang: str = Query(default="en", description="Language to search card content in (en/hi/gu)."),
+    limit: int = Query(default=20, ge=1, le=100, description="Max results (max 100)."),
+) -> FeedResponse:
+    from main import state
+
+    search_lang = lang if lang in VALID_LANGS else "en"
+    like_pattern = f"%{q}%"
+
+    try:
+        content_query = (
+            state.supabase
+            .table("cards")
+            .select("*, decks(title, topic_tag)")
+            .eq("status", "approved")
+            .or_(
+                f"content->{search_lang}->>title.ilike.{like_pattern},"
+                f"content->{search_lang}->>body.ilike.{like_pattern}"
+            )
+            .limit(limit)
+        )
+        content_matches = (await content_query.execute()).data or []
+
+        deck_rows = (
+            await state.supabase.table("decks").select("id").ilike("title", like_pattern).execute()
+        ).data or []
+        matching_deck_ids = [d["id"] for d in deck_rows]
+
+        deck_matches = []
+        if matching_deck_ids:
+            deck_card_query = (
+                state.supabase
+                .table("cards")
+                .select("*, decks(title, topic_tag)")
+                .eq("status", "approved")
+                .in_("deck_id", matching_deck_ids)
+                .limit(limit)
+            )
+            deck_matches = (await deck_card_query.execute()).data or []
+    except Exception as exc:
+        logger.exception("Supabase query failed for /search")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Search failed.") from exc
+
+    seen: set[str] = set()
+    merged = []
+    for row in content_matches + deck_matches:
+        row_id = row["id"]
+        if row_id in seen:
+            continue
+        seen.add(row_id)
+        merged.append(row)
+    merged = merged[:limit]
+
+    cards = []
+    for row in merged:
+        deck_info = row.get("decks")
+        if deck_info and isinstance(deck_info, dict):
+            row["deck_title"] = deck_info.get("title")
+        cards.append(CardOut(**row))
+
+    logger.info("Search served %d cards (q=%r, lang=%s)", len(cards), q, search_lang)
+    return FeedResponse(cards=cards, count=len(cards))
