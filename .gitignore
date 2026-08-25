@@ -31,3 +31,16 @@ Thumbs.db
 
 # IDE agent configs
 mobile/.claude/
+
+# ──────────────────────────────────────────────
+# ML Pipeline
+# ──────────────────────────────────────────────
+ml_pipeline/.env
+ml_pipeline/venv/
+ml_pipeline/__pycache__/
+ml_pipeline/**/__pycache__/
+ml_pipeline/*.pyc
+ml_pipeline/dry_run/
+ml_pipeline/flagged/
+ml_pipeline/run_log.jsonl
+ml_pipeline/.llm_call_budget.json
