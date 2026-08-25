@@ -43,6 +43,24 @@ export interface ChromeStrings {
     shareApp: string;
     shareMessage: string;
     feedback: string;
+    loginPrompt: string;
+    loginButton: string;
+    logoutButton: string;
+    loggedInAs: string;
+    saveRequiresLogin: string;
+  };
+  auth: {
+    signInTitle: string;
+    signUpTitle: string;
+    emailLabel: string;
+    emailPlaceholder: string;
+    passwordLabel: string;
+    passwordPlaceholder: string;
+    signInButton: string;
+    signUpButton: string;
+    switchToSignUp: string;
+    switchToSignIn: string;
+    loading: string;
   };
 }
 
@@ -86,6 +104,24 @@ export const CHROME: Record<Language, ChromeStrings> = {
       shareApp: 'Share App',
       shareMessage: 'Check out Jinvani — Jain scripture in your pocket.',
       feedback: 'Send Feedback',
+      loginPrompt: 'Log in to save cards across your devices.',
+      loginButton: 'Log In / Sign Up',
+      logoutButton: 'Log Out',
+      loggedInAs: 'Logged in as',
+      saveRequiresLogin: 'Log in to save cards.',
+    },
+    auth: {
+      signInTitle: 'Log In',
+      signUpTitle: 'Sign Up',
+      emailLabel: 'Email',
+      emailPlaceholder: 'you@example.com',
+      passwordLabel: 'Password',
+      passwordPlaceholder: 'At least 6 characters',
+      signInButton: 'Log In',
+      signUpButton: 'Create Account',
+      switchToSignUp: "Don't have an account? Sign up",
+      switchToSignIn: 'Already have an account? Log in',
+      loading: 'Please wait...',
     },
   },
   hi: {
@@ -127,6 +163,24 @@ export const CHROME: Record<Language, ChromeStrings> = {
       shareApp: 'ऐप साझा करें',
       shareMessage: 'जिनवाणी देखें — आपकी जेब में जैन शास्त्र।',
       feedback: 'प्रतिक्रिया भेजें',
+      loginPrompt: 'अपने सभी डिवाइस पर कार्ड सहेजने के लिए लॉग इन करें।',
+      loginButton: 'लॉग इन / साइन अप',
+      logoutButton: 'लॉग आउट',
+      loggedInAs: 'इस रूप में लॉग इन:',
+      saveRequiresLogin: 'कार्ड सहेजने के लिए लॉग इन करें।',
+    },
+    auth: {
+      signInTitle: 'लॉग इन करें',
+      signUpTitle: 'साइन अप करें',
+      emailLabel: 'ईमेल',
+      emailPlaceholder: 'you@example.com',
+      passwordLabel: 'पासवर्ड',
+      passwordPlaceholder: 'कम से कम 6 अक्षर',
+      signInButton: 'लॉग इन करें',
+      signUpButton: 'खाता बनाएं',
+      switchToSignUp: 'खाता नहीं है? साइन अप करें',
+      switchToSignIn: 'पहले से खाता है? लॉग इन करें',
+      loading: 'कृपया प्रतीक्षा करें...',
     },
   },
   gu: {
@@ -168,6 +222,24 @@ export const CHROME: Record<Language, ChromeStrings> = {
       shareApp: 'એપ શેર કરો',
       shareMessage: 'જિનવાણી જુઓ — તમારા ખિસ્સામાં જૈન શાસ્ત્ર.',
       feedback: 'પ્રતિભાવ મોકલો',
+      loginPrompt: 'તમારા બધા ડિવાઇસ પર કાર્ડ સાચવવા માટે લૉગ ઇન કરો.',
+      loginButton: 'લૉગ ઇન / સાઇન અપ',
+      logoutButton: 'લૉગ આઉટ',
+      loggedInAs: 'આ રીતે લૉગ ઇન:',
+      saveRequiresLogin: 'કાર્ડ સાચવવા માટે લૉગ ઇન કરો.',
+    },
+    auth: {
+      signInTitle: 'લૉગ ઇન કરો',
+      signUpTitle: 'સાઇન અપ કરો',
+      emailLabel: 'ઈમેલ',
+      emailPlaceholder: 'you@example.com',
+      passwordLabel: 'પાસવર્ડ',
+      passwordPlaceholder: 'ઓછામાં ઓછા 6 અક્ષરો',
+      signInButton: 'લૉગ ઇન કરો',
+      signUpButton: 'ખાતું બનાવો',
+      switchToSignUp: 'ખાતું નથી? સાઇન અપ કરો',
+      switchToSignIn: 'પહેલેથી ખાતું છે? લૉગ ઇન કરો',
+      loading: 'કૃપા કરી રાહ જુઓ...',
     },
   },
 };

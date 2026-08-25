@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, View } from 'react-native';
 import { useThemeStore } from '../src/store/useThemeStore';
 import { useFeedStore } from '../src/store/useFeedStore';
-import { useSavedStore } from '../src/store/useSavedStore';
+import { useAuthStore } from '../src/store/useAuthStore';
 import { Colors } from '../src/theme';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { useScriptFonts } from '../src/utils/fonts';
@@ -15,15 +15,15 @@ export default function RootLayout() {
   const theme = useThemeStore((state) => state.theme);
   const loadTheme = useThemeStore((state) => state.loadTheme);
   const loadLanguage = useFeedStore((state) => state.loadLanguage);
-  const loadSaved = useSavedStore((state) => state.loadSaved);
+  const initAuth = useAuthStore((state) => state.init);
   const colors = Colors[theme];
   const scriptFontsLoaded = useScriptFonts();
 
   useEffect(() => {
     loadTheme();
     loadLanguage();
-    loadSaved();
-  }, [loadTheme, loadLanguage, loadSaved]);
+    initAuth();
+  }, [loadTheme, loadLanguage, initAuth]);
 
   // Hold a blank frame (in the current theme's background) rather than
   // flashing Devanagari/Gujarati text in the system font before the
@@ -40,6 +40,7 @@ export default function RootLayout() {
           <ErrorBoundary>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="auth" options={{ headerShown: false, presentation: 'modal' }} />
             </Stack>
           </ErrorBoundary>
         </View>

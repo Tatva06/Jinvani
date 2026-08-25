@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { RotateCw, Bookmark } from 'lucide-react-native';
 
@@ -10,6 +11,7 @@ import { resolveCardContent } from '../utils/content';
 import { CHROME } from '../i18n/chrome';
 import { scriptFontFamily, verseScriptFontFamily } from '../utils/fonts';
 import { useSavedStore } from '../store/useSavedStore';
+import { useAuthStore } from '../store/useAuthStore';
 
 const FLIP_DURATION_MS = 420;
 
@@ -34,8 +36,17 @@ export const JinvaniCard = React.memo(function JinvaniCard({
   // fallback cards, which currently don't).
   const canFlip = Boolean(card.originalVerse);
 
+  const router = useRouter();
   const isSaved = useSavedStore((s) => s.isSaved(card.id));
   const toggleSaved = useSavedStore((s) => s.toggleSaved);
+  const profileId = useAuthStore((s) => s.profileId);
+
+  const handleToggleSaved = async () => {
+    const result = await toggleSaved(profileId, card);
+    if (result === 'requires-login') {
+      router.push('/auth');
+    }
+  };
 
   // Worklet-driven rotation — runs on the UI thread, not JS-thread state.
   // 0deg = front face showing, 180deg = back face showing.
@@ -160,9 +171,9 @@ export const JinvaniCard = React.memo(function JinvaniCard({
         </Pressable>
       )}
 
-      {/* ─── Save (local-device-only bookmark) ─── */}
+      {/* ─── Save — requires login; prompts the auth screen if logged out ─── */}
       <Pressable
-        onPress={() => toggleSaved(card)}
+        onPress={handleToggleSaved}
         hitSlop={12}
         style={[styles.flipButton, styles.leftActionButton, {
           backgroundColor: isSaved ? c.accent : c.accentMuted,

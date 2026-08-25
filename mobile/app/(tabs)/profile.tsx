@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   Linking,
   Pressable,
   ScrollView,
@@ -11,11 +12,12 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bell, Bookmark, Info, MessageCircle, Moon, Share2, Sun } from 'lucide-react-native';
+import { Bell, Bookmark, Info, LogIn, LogOut, MessageCircle, Moon, Share2, Sun, User as UserIcon } from 'lucide-react-native';
 
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
 import { useSavedStore } from '../../src/store/useSavedStore';
+import { useAuthStore } from '../../src/store/useAuthStore';
 import { Colors } from '../../src/theme';
 import { Language, SeedCard } from '../../src/types';
 import { SettingsRow } from '../../src/components/SettingsRow';
@@ -48,9 +50,15 @@ export default function ProfileScreen() {
   const setDefaultTopic = useFeedStore((s) => s.setDefaultTopic);
   const openSingleCard = useFeedStore((s) => s.openSingleCard);
   const savedCards = useSavedStore((s) => s.savedCards);
-  const t = CHROME[language];
+  const isLoadingSaved = useSavedStore((s) => s.isLoading);
 
+  const user = useAuthStore((s) => s.user);
+  const isInitializingAuth = useAuthStore((s) => s.isInitializing);
+  const signOut = useAuthStore((s) => s.signOut);
+
+  const t = CHROME[language];
   const isDark = theme === 'dark';
+  const isLoggedIn = Boolean(user);
 
   const handleOpenSaved = (card: SeedCard) => {
     openSingleCard(card);
@@ -75,35 +83,78 @@ export default function ProfileScreen() {
           {t.profile.title}
         </Text>
 
-        {/* — Saved (local device storage only — no account) — */}
-        <Text style={[styles.sectionHeader, { color: colors.accent, fontFamily: scriptFontFamily(language, '700') }]}>
-          {t.profile.saved}
-        </Text>
-        {savedCards.length === 0 ? (
-          <View style={[styles.emptyBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.emptyText, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
-              {t.profile.savedEmpty}
-            </Text>
-          </View>
-        ) : (
-          savedCards.map((card) => {
-            const content = resolveCardContent(card.content, language);
-            return (
-              <Pressable
-                key={card.id}
-                onPress={() => handleOpenSaved(card)}
-                style={[styles.savedRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              >
-                <Bookmark size={16} color={colors.accent} fill={colors.accent} />
-                <Text numberOfLines={1} style={[styles.savedRowText, { color: colors.text, fontFamily: scriptFontFamily(language, '500') }]}>
-                  {content.title}
-                </Text>
+        {/* — Account (real Supabase Auth — entirely optional; everything
+             below this section works fully logged out) — */}
+        {!isInitializingAuth && (
+          isLoggedIn ? (
+            <>
+              <SettingsRow
+                label={t.profile.loggedInAs}
+                subtitle={user?.email ?? ''}
+                language={language}
+                icon={<UserIcon size={18} color={colors.accent} />}
+                colors={colors}
+                right={<View />}
+              />
+              <Pressable onPress={() => signOut()}>
+                <SettingsRow
+                  label={t.profile.logoutButton}
+                  language={language}
+                  icon={<LogOut size={18} color={colors.accent} />}
+                  colors={colors}
+                />
               </Pressable>
-            );
-          })
+            </>
+          ) : (
+            <Pressable onPress={() => router.push('/auth')} style={[styles.loginBox, { backgroundColor: colors.accentMuted, borderColor: colors.accentBorder }]}>
+              <LogIn size={18} color={colors.accent} />
+              <View style={styles.loginBoxText}>
+                <Text style={[styles.loginPrompt, { color: colors.text, fontFamily: scriptFontFamily(language, '500') }]}>
+                  {t.profile.loginPrompt}
+                </Text>
+                <Text style={[styles.loginButtonText, { color: colors.accent, fontFamily: scriptFontFamily(language, '700') }]}>
+                  {t.profile.loginButton}
+                </Text>
+              </View>
+            </Pressable>
+          )
         )}
 
-        {/* — Personalize feed — */}
+        {/* — Saved (real, cross-device — requires login) — */}
+        {isLoggedIn && (
+          <>
+            <Text style={[styles.sectionHeader, { color: colors.accent, fontFamily: scriptFontFamily(language, '700') }]}>
+              {t.profile.saved}
+            </Text>
+            {isLoadingSaved ? (
+              <ActivityIndicator color={colors.accent} style={styles.savedLoading} />
+            ) : savedCards.length === 0 ? (
+              <View style={[styles.emptyBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.emptyText, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
+                  {t.profile.savedEmpty}
+                </Text>
+              </View>
+            ) : (
+              savedCards.map((card) => {
+                const content = resolveCardContent(card.content, language);
+                return (
+                  <Pressable
+                    key={card.id}
+                    onPress={() => handleOpenSaved(card)}
+                    style={[styles.savedRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  >
+                    <Bookmark size={16} color={colors.accent} fill={colors.accent} />
+                    <Text numberOfLines={1} style={[styles.savedRowText, { color: colors.text, fontFamily: scriptFontFamily(language, '500') }]}>
+                      {content.title}
+                    </Text>
+                  </Pressable>
+                );
+              })
+            )}
+          </>
+        )}
+
+        {/* — Personalize feed — device preference, works logged out — */}
         <Text style={[styles.sectionHeader, { color: colors.accent, fontFamily: scriptFontFamily(language, '700') }]}>
           {t.profile.personalizeFeed}
         </Text>
@@ -228,6 +279,11 @@ const styles = StyleSheet.create({
   sectionHeader: { fontSize: 11.5, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 10, marginTop: 4 },
   subLabel: { fontSize: 12.5, marginBottom: 10, marginTop: -4 },
   topicStripInline: { marginHorizontal: -20, marginBottom: 16 },
+  loginBox: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 16 },
+  loginBoxText: { flex: 1, gap: 4 },
+  loginPrompt: { fontSize: 13, lineHeight: 18 },
+  loginButtonText: { fontSize: 13, fontWeight: '700' },
+  savedLoading: { marginBottom: 10 },
   emptyBox: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 10 },
   emptyText: { fontSize: 13 },
   savedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
