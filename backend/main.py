@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import AsyncClient, acreate_client
 
-from routers import feed, bookmarks, search
+from routers import feed, bookmarks, search, books
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,6 +66,7 @@ app.add_middleware(
 app.include_router(feed.router,      prefix="/api/v1", tags=["Feed"])
 app.include_router(bookmarks.router, prefix="/api/v1", tags=["Bookmarks"])
 app.include_router(search.router,    prefix="/api/v1", tags=["Search"])
+app.include_router(books.router,     prefix="/api/v1", tags=["Books"])
 
 
 @app.get("/health", tags=["Health"])

@@ -31,26 +31,45 @@ def _word_count(text: str) -> int:
     return len(text.split())
 
 
-def validate_card(chunk: Chunk, card: StructuredCard, cfg: PipelineConfig) -> ValidationResult:
+def _validate_content_langs(content: dict, cfg: PipelineConfig, enforce_word_bounds: bool = True) -> list[str]:
+    """Per-language shape/word-count checks — shared by validate_card
+    (one chunk -> one card) and validate_multi_card (one digest/narrative
+    array element -> one card). Everything except the verse-similarity
+    check, which only makes sense for a chunk-based verse translation
+    that has a source chunk.text to compare against.
+    """
     reasons: list[str] = []
-
     for lang in LANGS:
-        lang_content = card.content.get(lang)
+        lang_content = content.get(lang)
         if not lang_content:
             reasons.append(f"missing content for language '{lang}'")
             continue
-        body = lang_content.get("body", "")
-        wc = _word_count(body)
-        bounds = cfg.word_bounds[lang]
-        if not (bounds.min_words <= wc <= bounds.max_words):
-            reasons.append(
-                f"{lang}.body word count {wc} outside range "
-                f"[{bounds.min_words}, {bounds.max_words}]"
-            )
+        if enforce_word_bounds:
+            body = lang_content.get("body", "")
+            wc = _word_count(body)
+            bounds = cfg.word_bounds[lang]
+            if not (bounds.min_words <= wc <= bounds.max_words):
+                reasons.append(
+                    f"{lang}.body word count {wc} outside range "
+                    f"[{bounds.min_words}, {bounds.max_words}]"
+                )
         if not lang_content.get("title"):
             reasons.append(f"{lang}.title is empty")
         if not lang_content.get("takeaway"):
             reasons.append(f"{lang}.takeaway is empty")
+    return reasons
+
+
+def validate_card(chunk: Chunk, card: StructuredCard, cfg: PipelineConfig) -> ValidationResult:
+    # word_bounds exists to keep *compressed* concept cards within a
+    # target reading length. Verbatim mode's entire point is preserving
+    # the source paragraph's own length — enforcing the same 60-140-word
+    # (etc.) window here would force a short paragraph to be padded and a
+    # long one to be cut, which is exactly the compression this mode
+    # exists to avoid. So word bounds are skipped for verbatim; every
+    # other per-language check (non-empty title/body/takeaway, all 3
+    # languages present) still applies.
+    reasons = _validate_content_langs(card.content, cfg, enforce_word_bounds=(chunk.mode != "verbatim"))
 
     if chunk.mode == "verse":
         if not card.original_verse or not card.original_verse.get("text"):
@@ -67,3 +86,19 @@ def validate_card(chunk: Chunk, card: StructuredCard, cfg: PipelineConfig) -> Va
                 )
 
     return ValidationResult(passed=(len(reasons) == 0), reasons=reasons)
+
+
+def validate_multi_card(cards: list[StructuredCard], cfg: PipelineConfig) -> list[ValidationResult]:
+    """Validates a digest/narrative array — one ValidationResult per input
+    card, same order. Reuses validate_card's per-language checks (word
+    bounds included — unlike verbatim, digest/narrative cards are still
+    meant to be card-sized, not full-length reproductions) minus the
+    verse-similarity branch, which has no equivalent here: there's no
+    single source chunk per output card to compare against, since all the
+    cards in the array came from one LLM call over the whole page range.
+    """
+    results: list[ValidationResult] = []
+    for card in cards:
+        reasons = _validate_content_langs(card.content, cfg)
+        results.append(ValidationResult(passed=(len(reasons) == 0), reasons=reasons))
+    return results

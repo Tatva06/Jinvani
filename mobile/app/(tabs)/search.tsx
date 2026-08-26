@@ -76,6 +76,20 @@ export default function SearchScreen() {
         />
       </View>
 
+      {!query.trim() && !isSearching && (
+        <View style={styles.initialState}>
+          <View style={[styles.initialIcon, { backgroundColor: colors.accentMuted, borderColor: colors.accentBorder }]}>
+            <SearchIcon size={28} color={colors.accent} />
+          </View>
+          <Text style={[styles.initialTitle, { color: colors.text, fontFamily: scriptFontFamily(language, '700') }]}>
+            {t.search.placeholder}
+          </Text>
+          <Text style={[styles.initialSubtitle, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
+            Search across all texts, topics, and teachings
+          </Text>
+        </View>
+      )}
+
       {isSearching && (
         <View style={styles.centerBlock}>
           <ActivityIndicator color={colors.accent} />
@@ -103,7 +117,11 @@ export default function SearchScreen() {
           return (
             <Pressable
               onPress={() => handleSelect(item)}
-              style={[styles.resultRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              style={({ pressed }) => [
+                styles.resultRow,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                pressed && { opacity: 0.75 },
+              ]}
             >
               <Text numberOfLines={1} style={[styles.resultTitle, { color: colors.text, fontFamily: scriptFontFamily(language, '600') }]}>
                 {content.title}
@@ -124,8 +142,12 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 20 },
-  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 46, marginBottom: 16 },
+  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 48, marginBottom: 16 },
   input: { flex: 1, fontSize: 15 },
+  initialState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 16, paddingBottom: 80 },
+  initialIcon: { width: 72, height: 72, borderRadius: 36, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  initialTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  initialSubtitle: { fontSize: 13, textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 },
   centerBlock: { alignItems: 'center', paddingVertical: 24, gap: 8 },
   statusText: { fontSize: 13 },
   listContent: { paddingBottom: 40, gap: 10 },

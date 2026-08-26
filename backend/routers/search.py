@@ -34,7 +34,7 @@ async def search_cards(
         content_query = (
             state.supabase
             .table("cards")
-            .select("*, decks(title, topic_tag)")
+            .select("*, decks(title, topic_tag, book_id, sequence_order)")
             .eq("status", "approved")
             .or_(
                 f"content->{search_lang}->>title.ilike.{like_pattern},"
@@ -54,7 +54,7 @@ async def search_cards(
             deck_card_query = (
                 state.supabase
                 .table("cards")
-                .select("*, decks(title, topic_tag)")
+                .select("*, decks(title, topic_tag, book_id, sequence_order)")
                 .eq("status", "approved")
                 .in_("deck_id", matching_deck_ids)
                 .limit(limit)
@@ -79,6 +79,8 @@ async def search_cards(
         deck_info = row.get("decks")
         if deck_info and isinstance(deck_info, dict):
             row["deck_title"] = deck_info.get("title")
+            row["book_id"] = deck_info.get("book_id")
+            row["deck_sequence_order"] = deck_info.get("sequence_order")
         cards.append(CardOut(**row))
 
     logger.info("Search served %d cards (q=%r, lang=%s)", len(cards), q, search_lang)

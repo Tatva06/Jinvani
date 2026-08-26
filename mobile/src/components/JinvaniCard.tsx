@@ -2,8 +2,9 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { RotateCw, Bookmark } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 
 import { Colors } from '../theme';
 import { Language, SeedCard } from '../types';
@@ -12,6 +13,32 @@ import { CHROME } from '../i18n/chrome';
 import { scriptFontFamily, verseScriptFontFamily } from '../utils/fonts';
 import { useSavedStore } from '../store/useSavedStore';
 import { useAuthStore } from '../store/useAuthStore';
+
+function SourceLabel({
+  card,
+  colors,
+}: {
+  card: SeedCard;
+  colors: (typeof Colors)['dark'];
+}) {
+  const router = useRouter();
+  const label = card.deckTitle ? `${card.deckTitle} • ${card.citation}` : card.citation;
+
+  if (!card.bookId) {
+    // No book_id (e.g. an offline seed-data fallback card) — nothing to
+    // navigate to, so render as plain text rather than a dead tap target.
+    return <Text style={[styles.citationText, { color: colors.textMuted }]}>{label}</Text>;
+  }
+
+  return (
+    <Pressable
+      onPress={() => router.push({ pathname: '/book/[bookId]', params: { bookId: card.bookId! } })}
+      hitSlop={6}
+    >
+      <Text style={[styles.citationText, styles.citationTextTappable, { color: colors.textMuted }]}>{label}</Text>
+    </Pressable>
+  );
+}
 
 const FLIP_DURATION_MS = 420;
 
@@ -58,6 +85,21 @@ export const JinvaniCard = React.memo(function JinvaniCard({
     const next = rotation.value === 0 ? 180 : 0;
     rotation.value = withTiming(next, { duration: FLIP_DURATION_MS });
     setIsBack(next === 180);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  // Press-scale animations for action buttons
+  const flipScale = useSharedValue(1);
+  const bookmarkScale = useSharedValue(1);
+  const flipButtonStyle = useAnimatedStyle(() => ({ transform: [{ scale: flipScale.value }] }));
+  const bookmarkButtonStyle = useAnimatedStyle(() => ({ transform: [{ scale: bookmarkScale.value }] }));
+
+  const handleToggleSavedWithHaptic = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const result = await toggleSaved(profileId, card);
+    if (result === 'requires-login') {
+      router.push('/auth');
+    }
   };
 
   const frontAnimatedStyle = useAnimatedStyle(() => ({
@@ -81,8 +123,8 @@ export const JinvaniCard = React.memo(function JinvaniCard({
       <View
         style={[styles.glowOrb, {
           backgroundColor: themeMode === 'dark'
-            ? 'rgba(200,169,110,0.06)'
-            : 'rgba(156,111,46,0.06)',
+            ? 'rgba(200,169,110,0.12)'
+            : 'rgba(139,93,32,0.10)',
         }]}
         pointerEvents="none"
       />
@@ -92,7 +134,7 @@ export const JinvaniCard = React.memo(function JinvaniCard({
         style={[styles.face, frontAnimatedStyle]}
         pointerEvents={isBack ? 'none' : 'auto'}
       >
-        <View style={[styles.cardInner, { paddingTop: insets.top + 100, paddingBottom: insets.bottom + 80 }]}>
+        <View style={[styles.cardInner, { paddingTop: 20, paddingBottom: insets.bottom + 80 }]}>
           {/* Top */}
           <View style={styles.topSection}>
             <View style={[styles.deckBadge, { backgroundColor: c.accentMuted, borderColor: c.accentBorder }]}>
@@ -129,7 +171,7 @@ export const JinvaniCard = React.memo(function JinvaniCard({
               </View>
               <Text style={[styles.takeawayText, { color: c.text, fontFamily: scriptFontFamily(language, '400') }]}>{content.takeaway}</Text>
             </View>
-            <Text style={[styles.citationText, { color: c.textMuted }]}>{card.citation}</Text>
+            <SourceLabel card={card} colors={c} />
           </View>
         </View>
       </Animated.View>
@@ -140,7 +182,7 @@ export const JinvaniCard = React.memo(function JinvaniCard({
           style={[styles.face, backAnimatedStyle]}
           pointerEvents={isBack ? 'auto' : 'none'}
         >
-          <View style={[styles.cardInner, styles.backInner, { paddingTop: insets.top + 100, paddingBottom: insets.bottom + 80 }]}>
+          <View style={[styles.cardInner, styles.backInner, { paddingTop: 20, paddingBottom: insets.bottom + 80 }]}>
             <Text style={[styles.backLabel, { color: c.accent }]}>{CHROME[language].feed.originalSource}</Text>
             <View style={[styles.titleDivider, { backgroundColor: c.accent }]} />
             <Text style={[styles.backScriptLabel, { color: c.textMuted }]}>
@@ -158,35 +200,54 @@ export const JinvaniCard = React.memo(function JinvaniCard({
 
       {/* ─── Flip affordance ─── */}
       {canFlip && (
-        <Pressable
-          onPress={flip}
-          hitSlop={12}
-          style={[styles.flipButton, styles.rightActionButton, {
-            backgroundColor: c.accentMuted,
-            borderColor: c.accentBorder,
-            bottom: insets.bottom + 96,
-          }]}
-        >
-          <RotateCw size={16} color={c.accent} />
-        </Pressable>
+        <Animated.View style={[styles.flipButton, styles.rightActionButton, flipButtonStyle, {
+          backgroundColor: c.accentMuted,
+          borderColor: c.accentBorder,
+          bottom: insets.bottom + 96,
+        }]}>
+          <Pressable
+            onPress={() => {
+              flipScale.value = withSpring(0.88, { damping: 10 }, () => {
+                flipScale.value = withSpring(1);
+              });
+              flip();
+            }}
+            hitSlop={12}
+            style={styles.actionButtonInner}
+            accessibilityLabel="Flip card to see original verse"
+            accessibilityRole="button"
+          >
+            <RotateCw size={16} color={c.accent} />
+          </Pressable>
+        </Animated.View>
       )}
 
       {/* ─── Save — requires login; prompts the auth screen if logged out ─── */}
-      <Pressable
-        onPress={handleToggleSaved}
-        hitSlop={12}
-        style={[styles.flipButton, styles.leftActionButton, {
-          backgroundColor: isSaved ? c.accent : c.accentMuted,
-          borderColor: c.accentBorder,
-          bottom: insets.bottom + 96,
-        }]}
-      >
-        <Bookmark
-          size={16}
-          color={isSaved ? (themeMode === 'dark' ? '#0A0A0F' : '#FFFFFF') : c.accent}
-          fill={isSaved ? (themeMode === 'dark' ? '#0A0A0F' : '#FFFFFF') : 'none'}
-        />
-      </Pressable>
+      <Animated.View style={[styles.flipButton, styles.leftActionButton, bookmarkButtonStyle, {
+        backgroundColor: isSaved ? c.accent : c.accentMuted,
+        borderColor: c.accentBorder,
+        bottom: insets.bottom + 96,
+      }]}>
+        <Pressable
+          onPress={() => {
+            bookmarkScale.value = withSpring(0.88, { damping: 10 }, () => {
+              bookmarkScale.value = withSpring(1);
+            });
+            handleToggleSavedWithHaptic();
+          }}
+          hitSlop={12}
+          style={styles.actionButtonInner}
+          accessibilityLabel={isSaved ? 'Remove from saved' : 'Save this card'}
+          accessibilityRole="button"
+          accessibilityState={{ selected: isSaved }}
+        >
+          <Bookmark
+            size={16}
+            color={isSaved ? (themeMode === 'dark' ? '#0A0A0F' : '#FFFFFF') : c.accent}
+            fill={isSaved ? (themeMode === 'dark' ? '#0A0A0F' : '#FFFFFF') : 'none'}
+          />
+        </Pressable>
+      </Animated.View>
     </View>
   );
 });
@@ -203,7 +264,7 @@ const styles = StyleSheet.create({
   middleSection: { flex: 1, justifyContent: 'center', paddingVertical: 12 },
   cardTitle: { fontSize: 25, fontWeight: '700', lineHeight: 33, letterSpacing: -0.3, marginBottom: 14 },
   titleDivider: { width: 36, height: 2, borderRadius: 1, marginBottom: 18, opacity: 0.8 },
-  bodyText: { fontSize: 15.5, lineHeight: 25, fontWeight: '400', letterSpacing: 0.1 },
+  bodyText: { fontSize: 16, lineHeight: 26, fontWeight: '400', letterSpacing: 0.1 },
   verseContainer: { marginTop: 20, padding: 14, borderWidth: 1, borderRadius: 12 },
   verseScriptLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 6 },
   verseText: { fontSize: 14.5, lineHeight: 23, fontStyle: 'italic', letterSpacing: 0.3 },
@@ -212,19 +273,26 @@ const styles = StyleSheet.create({
   takeawayHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   takeawayDot: { width: 6, height: 6, borderRadius: 3 },
   takeawayLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase' },
-  takeawayText: { fontSize: 14, lineHeight: 21 },
+  // bumped from 14 → 15.5 since takeaway is the most important text on the card
+  takeawayText: { fontSize: 15.5, lineHeight: 23 },
   citationText: { fontSize: 11.5, fontStyle: 'italic', textAlign: 'right', letterSpacing: 0.2, paddingRight: 4, marginBottom: 2 },
+  citationTextTappable: { textDecorationLine: 'underline' },
   backInner: { justifyContent: 'center', alignItems: 'center' },
   backLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 14, textAlign: 'center' },
   backScriptLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 18, textAlign: 'center' },
   backVerseText: { fontSize: 20, lineHeight: 32, fontStyle: 'italic', textAlign: 'center', letterSpacing: 0.2 },
-  backCitation: { position: 'absolute', bottom: 0, right: 0, textAlign: 'center' },
+  // citation is part of natural flow on back face, not absolute
+  backCitation: { marginTop: 16, textAlign: 'center' },
   flipButton: {
     position: 'absolute',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
+    overflow: 'hidden',
+  },
+  actionButtonInner: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

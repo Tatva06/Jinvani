@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { SeedCard, Language } from '../types';
 import { SEED_CARDS } from '../seedData';
-import { fetchFeed } from '../api/client';
+import { fetchFeed, fetchBookCards } from '../api/client';
 import { storage } from './mmkvStorage';
 
 const LANGUAGE_KEY = 'app-language';
@@ -44,7 +44,29 @@ interface FeedState {
    * non-paginated feed — reuses the same feed screen and JinvaniCard
    * rendering rather than a separate detail view. */
   openSingleCard: (card: SeedCard) => void;
+
+  // ─── Book reading mode — plays one book's cards in real stored order
+  // (deck.sequence_order, then card.sequence_order), reusing this same
+  // feed screen/FlashList/JinvaniCard rather than a second card UI. ───
+  isBookMode: boolean;
+  bookModeTitle: string | null;
+  startBookReading: (bookId: string, bookTitle: string, startDeckSequenceOrder?: number) => Promise<void>;
+  exitBookMode: () => void;
 }
+
+interface FeedSnapshot {
+  cards: SeedCard[];
+  topicFilter: string | null;
+  activeIndex: number;
+  hasMore: boolean;
+  nextOffset: number;
+}
+
+// Snapshot of the normal topic-feed state, taken right before entering book
+// mode and restored on exit — kept outside the reactive store state
+// (nothing should subscribe to it; it's pure internal bookkeeping) so
+// entering/exiting book mode can never silently corrupt normal feed state.
+let preBookModeSnapshot: FeedSnapshot | null = null;
 
 function isLanguage(value: unknown): value is Language {
   return value === 'en' || value === 'hi' || value === 'gu';
@@ -92,6 +114,8 @@ export const useFeedStore = create<FeedState>((set, get) => ({
   activeIndex: 0,
   hasMore: true,
   nextOffset: 0,
+  isBookMode: false,
+  bookModeTitle: null,
 
   setTopic: (topic: string | null) => {
     set({ topicFilter: topic });
@@ -191,5 +215,57 @@ export const useFeedStore = create<FeedState>((set, get) => ({
       nextOffset: 0,
       error: null,
     });
+  },
+
+  startBookReading: async (bookId: string, bookTitle: string, startDeckSequenceOrder?: number) => {
+    if (!get().isBookMode) {
+      const s = get();
+      preBookModeSnapshot = {
+        cards: s.cards,
+        topicFilter: s.topicFilter,
+        activeIndex: s.activeIndex,
+        hasMore: s.hasMore,
+        nextOffset: s.nextOffset,
+      };
+    }
+    set({ isLoading: true, error: null, isBookMode: true, bookModeTitle: bookTitle });
+
+    try {
+      // Books are small at this scale — one full fetch, no pagination.
+      const response = await fetchBookCards(bookId);
+      const cards = response.cards;
+      const startIndex = startDeckSequenceOrder != null
+        ? Math.max(0, cards.findIndex((c) => c.deckSequenceOrder === startDeckSequenceOrder))
+        : 0;
+      set({
+        cards,
+        activeIndex: startIndex,
+        isLoading: false,
+        hasMore: false,
+        nextOffset: 0,
+        topicFilter: null,
+      });
+    } catch (err: any) {
+      console.warn('Failed to load book reading mode:', err?.message);
+      set({ isLoading: false, error: err?.message || 'Failed to load book' });
+    }
+  },
+
+  exitBookMode: () => {
+    const snapshot = preBookModeSnapshot;
+    preBookModeSnapshot = null;
+    if (snapshot) {
+      set({
+        cards: snapshot.cards,
+        topicFilter: snapshot.topicFilter,
+        activeIndex: snapshot.activeIndex,
+        hasMore: snapshot.hasMore,
+        nextOffset: snapshot.nextOffset,
+        isBookMode: false,
+        bookModeTitle: null,
+      });
+    } else {
+      set({ isBookMode: false, bookModeTitle: null });
+    }
   },
 }));

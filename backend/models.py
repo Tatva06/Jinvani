@@ -16,11 +16,38 @@ class CardOut(BaseModel):
     original_verse: dict[str, Any] | None = None
     deck_title: str | None = None
     decks: dict[str, Any] | None = None
+    # Populated for the book-detail/book-reading endpoints (and, going
+    # forward, the main feed too) so the client can navigate to a card's
+    # book without parsing citation_reference strings.
+    book_id: str | None = None
+    deck_sequence_order: int | None = None
 
 
 class FeedResponse(BaseModel):
     cards: list[CardOut]
     count: int
+
+
+class DeckOut(BaseModel):
+    id: UUID
+    title: str
+    sequence_order: int
+    topic_tag: str | None = None
+    approved_card_count: int
+
+
+class BookOut(BaseModel):
+    book_id: str
+    # There is no books table / books.title column — the schema only has
+    # decks.book_id (a bare TEXT, no FK). This is the lowest-sequence_order
+    # deck's title, used as a readable stand-in for a proper book title.
+    title: str
+    decks: list[DeckOut]
+    approved_card_count: int
+
+
+class BooksResponse(BaseModel):
+    books: list[BookOut]
 
 
 class BookmarkRequest(BaseModel):

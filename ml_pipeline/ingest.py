@@ -96,34 +96,21 @@ def _is_sequence_order_conflict(error: Exception) -> bool:
     return "23505" in text or "cards_deck_order_unique" in text
 
 
-def ingest_card(
-    client: Client,
-    chunk: Chunk,
-    card: StructuredCard,
-    deck_id: str,
-    book_title: str,
-) -> IngestResult:
-    citation_reference = f"{book_title}, {chunk.citation_label}"
+# card_type derived from chunk.mode for the single-chunk pipeline (verse/
+# concept/verbatim). Multi-card modes (digest/narrative) set card_type to
+# their own style name directly in ingest_multi_card — there's no chunk
+# there to derive it from.
+_CARD_TYPE_BY_CHUNK_MODE = {"verse": "chunked_verse", "verbatim": "verbatim"}
 
-    if _already_exists(client, deck_id, citation_reference):
-        _log({
-            "event": "skipped_duplicate",
-            "deck_id": deck_id,
-            "citation_reference": citation_reference,
-        })
-        return IngestResult(status="skipped_duplicate", detail=citation_reference)
 
-    base_row = {
-        "deck_id": deck_id,
-        "card_type": "chunked_verse" if chunk.mode == "verse" else "summary",
-        "citation_reference": citation_reference,
-        "source_page_number": chunk.page_number,
-        "is_scholar_verified": False,
-        "status": "pending_review",  # never auto-approved — see module docstring
-        "content": card.content,
-        "original_verse": card.original_verse,
-    }
-
+def _insert_card_row(client: Client, deck_id: str, base_row: dict, citation_reference: str) -> IngestResult:
+    """Shared sequence_order-derivation + retry-on-23505-conflict insert
+    loop, used by both ingest_card (one chunk -> one card) and
+    ingest_multi_card (one digest/narrative array -> several cards in the
+    same deck). See module docstring for why sequence_order is re-derived
+    immediately before each insert rather than passed in as a run-local
+    counter.
+    """
     last_error: Exception | None = None
     for attempt in range(1, MAX_SEQUENCE_CONFLICT_RETRIES + 1):
         sequence_order = _get_next_sequence_order(client, deck_id)
@@ -150,3 +137,84 @@ def ingest_card(
         "error": f"exhausted {MAX_SEQUENCE_CONFLICT_RETRIES} sequence_order retries: {last_error}",
     })
     return IngestResult(status="error", detail=f"sequence_order conflict retries exhausted: {last_error}")
+
+
+def ingest_card(
+    client: Client,
+    chunk: Chunk,
+    card: StructuredCard,
+    deck_id: str,
+    book_title: str,
+) -> IngestResult:
+    citation_reference = f"{book_title}, {chunk.citation_label}"
+
+    if _already_exists(client, deck_id, citation_reference):
+        _log({
+            "event": "skipped_duplicate",
+            "deck_id": deck_id,
+            "citation_reference": citation_reference,
+        })
+        return IngestResult(status="skipped_duplicate", detail=citation_reference)
+
+    base_row = {
+        "deck_id": deck_id,
+        "card_type": _CARD_TYPE_BY_CHUNK_MODE.get(chunk.mode, "summary"),
+        "citation_reference": citation_reference,
+        "source_page_number": chunk.page_number,
+        "is_scholar_verified": False,
+        "status": "pending_review",  # never auto-approved — see module docstring
+        "content": card.content,
+        "original_verse": card.original_verse,
+    }
+    return _insert_card_row(client, deck_id, base_row, citation_reference)
+
+
+def ingest_multi_card(
+    client: Client,
+    cards: list[StructuredCard],
+    deck_id: str,
+    book_title: str,
+    unit_title: str,
+    style: str,
+) -> list[IngestResult]:
+    """Types 1 & 5 (digest / narrative): ingests a whole structure_multi_card
+    array into the same deck, in order. Unlike ingest_card there's no
+    per-card chunk.citation_label to draw from — the whole array came from
+    one LLM call over a page range, not one chunk per card — so
+    citation_reference instead encodes each card's position in THIS array:
+    "{book_title}, {unit_title} (Part i of {len(cards)})". Note this means
+    the "of N" reflects the length of whatever list is passed in — for
+    digest mode's partial-ingest policy (passing cards only, failures
+    flagged and dropped), that's the count of cards actually being
+    ingested, not the original array size the LLM returned.
+
+    Reuses ingest_card's sequence_order derivation and retry-on-conflict
+    logic via _insert_card_row — see that function and the module
+    docstring.
+    """
+    n = len(cards)
+    results: list[IngestResult] = []
+    for i, card in enumerate(cards, start=1):
+        citation_reference = f"{book_title}, {unit_title} (Part {i} of {n})"
+
+        if _already_exists(client, deck_id, citation_reference):
+            _log({
+                "event": "skipped_duplicate",
+                "deck_id": deck_id,
+                "citation_reference": citation_reference,
+            })
+            results.append(IngestResult(status="skipped_duplicate", detail=citation_reference))
+            continue
+
+        base_row = {
+            "deck_id": deck_id,
+            "card_type": style,
+            "citation_reference": citation_reference,
+            "source_page_number": None,  # spans a page range, not one page
+            "is_scholar_verified": False,
+            "status": "pending_review",  # never auto-approved — see module docstring
+            "content": card.content,
+            "original_verse": card.original_verse,
+        }
+        results.append(_insert_card_row(client, deck_id, base_row, citation_reference))
+    return results

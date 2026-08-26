@@ -35,4 +35,29 @@ export interface SeedCard {
     /** Transliterated or raw verse text */
     text: string;
   };
+  /** decks.book_id — a bare string, no books table. Used to navigate to
+   * Book Detail from a card's source/citation tap. */
+  bookId?: string;
+  /** decks.sequence_order — the card's chapter position within its book,
+   * distinct from cardType.sequence_order (the card's position within
+   * its own deck/chapter). */
+  deckSequenceOrder?: number;
+}
+
+// ─── Book / Library ─────────────────────────────────────────────────────────────
+export interface DeckSummary {
+  id: string;
+  title: string;
+  sequenceOrder: number;
+  topicTag: string | null;
+  approvedCardCount: number;
+}
+
+export interface Book {
+  bookId: string;
+  /** No books.title column exists — this is the lowest-sequence_order
+   * deck's title, used as a readable stand-in. */
+  title: string;
+  decks: DeckSummary[];
+  approvedCardCount: number;
 }

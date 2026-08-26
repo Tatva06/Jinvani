@@ -139,15 +139,105 @@ Cards land in Supabase as `pending_review`. They still need a human
 (currently: you, manually, until the CMS from Sprint 2 exists) to update
 `status` to `approved` before they'd ever be meant to reach end users.
 
-## Chunk modes
+## Ingestion modes
 
-- `--mode verse` — every chunk is treated as scripture, split on
+Five modes now exist, covering five different card types. `concept`/`auto`/
+`verse` run the original per-chunk pipeline (one LLM call per chunk,
+`--pdf`/`--deck-id`/`--book-title`); `verbatim` reuses that same pipeline
+with a different prompt; `digest`/`narrative` are a different shape
+entirely — one LLM call over a whole page range, requiring `--pages` and
+`--unit-title` in addition.
+
+- **`--mode concept`** — every chunk is treated as prose, split by
+  paragraph, compressed to a target word count (`word_bounds` in
+  `config.yaml`) with a modern-takeaway `takeaway`. Use for chapter
+  background/commentary that should read as short, self-contained ideas.
+  ```bash
+  python run.py --pdf sources/shaakahaar.pdf --deck-id <uuid> \
+    --book-title "Shaakahaar" --mode concept
+  ```
+
+- **`--mode verse`** — every chunk is treated as scripture, split on
   `verse_regex` in `config.yaml` (default matches `"Sutra 1.2"`-style
   markers — override with `--verse-regex` per book if the marker differs).
-- `--mode concept` — every chunk is treated as prose, split by paragraph.
-- `--mode auto` (default) — each page is routed to verse or concept
+  Literal translation only, zero temperature, `original_verse` preserved
+  verbatim in its source script. Use for a book that's citation-marked
+  verse/sutra text throughout.
+  ```bash
+  python run.py --pdf sources/tattvartha-sutra.pdf --deck-id <uuid> \
+    --book-title "Tattvartha Sutra" --mode verse
+  ```
+
+- **`--mode auto`** (default) — each page is routed to verse or concept
   chunking based on whether it contains a verse marker. A coarse heuristic;
-  check `dry_run/` output for mis-routed pages on a new book.
+  check `dry_run/` output for mis-routed pages on a new book. Use for a
+  book that mixes verse and surrounding commentary on the same pages.
+  ```bash
+  python run.py --pdf sources/tattvartha-sutra.pdf --deck-id <uuid> \
+    --book-title "Tattvartha Sutra" --mode auto
+  ```
+
+- **`--mode verbatim`** (Type 3) — same paragraph chunking as `concept`,
+  but the LLM is told to faithfully translate each paragraph into en/hi/gu
+  with NO compression, paraphrase, or rewriting — `word_bounds` is not
+  enforced for these cards (see "Why verbatim skips word bounds" below).
+  Use when the goal is reproducing the original book, unmodified, rather
+  than a distilled reading card.
+  ```bash
+  python run.py --pdf sources/shaakahaar.pdf --deck-id <uuid> \
+    --book-title "Shaakahaar" --mode verbatim
+  ```
+
+- **`--mode digest`** (Type 1) — ONE LLM call over a page range
+  (`--pages START-END`, 1-indexed inclusive), compressing that whole
+  book/chapter into a small number of cards (~3-5, model's judgment)
+  capturing its essential ideas. Requires `--unit-title` (e.g. a chapter
+  name) alongside `--book-title`, used to build each card's
+  `citation_reference`. Use for dense philosophical/doctrinal chapters you
+  want summarized rather than read paragraph-by-paragraph.
+  ```bash
+  python run.py --pdf sources/shaakahaar.pdf --deck-id <uuid> \
+    --book-title "Shaakahaar" --mode digest \
+    --pages 12-30 --unit-title "Chapter 2: Why Ahimsa"
+  ```
+
+- **`--mode narrative`** (Type 5) — ONE LLM call over a page range, same
+  `--pages`/`--unit-title` requirement as digest, breaking a story into
+  however many cards it naturally needs while preserving narrative
+  continuity (no re-introducing characters/context between cards). Use
+  for a parable, life account, or story chapter meant to be read in
+  sequence.
+  ```bash
+  python run.py --pdf sources/shaakahaar.pdf --deck-id <uuid> \
+    --book-title "Shaakahaar" --mode narrative \
+    --pages 45-52 --unit-title "The Merchant's Choice"
+  ```
+
+### Why verbatim skips word bounds
+
+`word_bounds` in `config.yaml` exists to keep *compressed* concept cards
+within a target reading length. Verbatim mode's entire point is
+preserving the source paragraph's own length — enforcing the same
+60-140-word (etc.) window there would force a short paragraph to be
+padded and a long one to be cut, defeating the mode. `validate_card`
+skips the word-count check specifically for `chunk.mode == "verbatim"`;
+every other per-language check (non-empty title/body/takeaway, all 3
+languages present) still applies.
+
+### Digest vs narrative: partial-ingest policy differs
+
+Both modes return one JSON array from one LLM call, validated card-by-card
+by `validate_multi_card`. What happens when some cards in that array pass
+and others don't is a deliberate, mode-specific choice (not the same
+policy for both):
+
+- **narrative**: ANY failing card rejects the WHOLE array. A missing
+  "Part 2 of 5" breaks the continuous, sequential-swipe reading
+  experience narrative mode exists for.
+- **digest**: passing cards are ingested, failing ones are flagged and
+  dropped. Digest cards are self-contained compressed points, so a gap
+  is low-cost, and discarding an otherwise-good LLM call over one card's
+  word-count miss would waste budget for no benefit.
 
 ## Useful flags
 

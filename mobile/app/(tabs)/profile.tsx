@@ -106,7 +106,16 @@ export default function ProfileScreen() {
               </Pressable>
             </>
           ) : (
-            <Pressable onPress={() => router.push('/auth')} style={[styles.loginBox, { backgroundColor: colors.accentMuted, borderColor: colors.accentBorder }]}>
+            <Pressable
+              onPress={() => router.push('/auth')}
+              style={({ pressed }) => [
+                styles.loginBox,
+                { backgroundColor: colors.accentMuted, borderColor: colors.accentBorder },
+                pressed && { opacity: 0.8 },
+              ]}
+              accessibilityLabel="Sign in or create an account"
+              accessibilityRole="button"
+            >
               <LogIn size={18} color={colors.accent} />
               <View style={styles.loginBoxText}>
                 <Text style={[styles.loginPrompt, { color: colors.text, fontFamily: scriptFontFamily(language, '500') }]}>
@@ -141,7 +150,13 @@ export default function ProfileScreen() {
                   <Pressable
                     key={card.id}
                     onPress={() => handleOpenSaved(card)}
-                    style={[styles.savedRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    style={({ pressed }) => [
+                      styles.savedRow,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
+                      pressed && { opacity: 0.75 },
+                    ]}
+                    accessibilityLabel={`Open saved card: ${resolveCardContent(card.content, language).title}`}
+                    accessibilityRole="button"
                   >
                     <Bookmark size={16} color={colors.accent} fill={colors.accent} />
                     <Text numberOfLines={1} style={[styles.savedRowText, { color: colors.text, fontFamily: scriptFontFamily(language, '500') }]}>
@@ -217,7 +232,7 @@ export default function ProfileScreen() {
           })}
         </View>
 
-        {/* — Notifications — */}
+        {/* — Notifications — TODO: wire up expo-notifications before shipping — */}
         <Text style={[styles.sectionHeader, { color: colors.accent, fontFamily: scriptFontFamily(language, '700') }]}>
           {t.settings.notifications}
         </Text>
@@ -225,13 +240,15 @@ export default function ProfileScreen() {
           label={t.settings.dailyReminder}
           subtitle={t.settings.dailyReminderSubtitle}
           language={language}
-          icon={<Bell size={18} color={colors.accent} />}
-          colors={colors}
+          icon={<Bell size={18} color={colors.textMuted} />}
+          colors={{ ...colors, accent: colors.textMuted, accentMuted: colors.surface, accentBorder: colors.border }}
           right={
             <Switch
               value={false}
+              disabled={true}
               trackColor={{ false: colors.border, true: colors.accent }}
               thumbColor="#FFFFFF"
+              accessibilityLabel="Daily reminder (coming soon)"
             />
           }
         />

@@ -23,7 +23,16 @@ export interface ChromeStrings {
   tabs: {
     search: string;
     feed: string;
+    library: string;
     profile: string;
+  };
+  library: {
+    title: string;
+    subtitle: string;
+    cardsLabel: string;
+    chaptersLabel: string;
+    chaptersTitle: string;
+    startReading: string;
   };
   feed: {
     keyTakeaway: string;
@@ -85,7 +94,15 @@ export const CHROME: Record<Language, ChromeStrings> = {
       allTopics: 'All Topics',
       categories: 'Categories',
     },
-    tabs: { search: 'Search', feed: 'Feed', profile: 'Profile' },
+    tabs: { search: 'Search', feed: 'Feed', library: 'Library', profile: 'Profile' },
+    library: {
+      title: 'Library',
+      subtitle: 'Browse full books in reading order.',
+      cardsLabel: 'cards',
+      chaptersLabel: 'chapters',
+      chaptersTitle: 'Chapters',
+      startReading: 'Start Reading',
+    },
     feed: {
       keyTakeaway: 'Key Takeaway',
       originalSource: 'Original Source',
@@ -144,7 +161,15 @@ export const CHROME: Record<Language, ChromeStrings> = {
       allTopics: 'सभी विषय',
       categories: 'श्रेणियाँ',
     },
-    tabs: { search: 'खोजें', feed: 'फ़ीड', profile: 'प्रोफ़ाइल' },
+    tabs: { search: 'खोजें', feed: 'फ़ीड', library: 'लाइब्रेरी', profile: 'प्रोफ़ाइल' },
+    library: {
+      title: 'लाइब्रेरी',
+      subtitle: 'पूरी किताबें पढ़ने के क्रम में देखें।',
+      cardsLabel: 'कार्ड',
+      chaptersLabel: 'अध्याय',
+      chaptersTitle: 'अध्याय',
+      startReading: 'पढ़ना शुरू करें',
+    },
     feed: {
       keyTakeaway: 'मुख्य सीख',
       originalSource: 'मूल स्रोत',
@@ -203,7 +228,15 @@ export const CHROME: Record<Language, ChromeStrings> = {
       allTopics: 'બધા વિષયો',
       categories: 'શ્રેણીઓ',
     },
-    tabs: { search: 'શોધો', feed: 'ફીડ', profile: 'પ્રોફાઇલ' },
+    tabs: { search: 'શોધો', feed: 'ફીડ', library: 'લાઇબ્રેરી', profile: 'પ્રોફાઇલ' },
+    library: {
+      title: 'લાઇબ્રેરી',
+      subtitle: 'સંપૂર્ણ પુસ્તકો વાંચન ક્રમમાં જુઓ.',
+      cardsLabel: 'કાર્ડ',
+      chaptersLabel: 'પ્રકરણો',
+      chaptersTitle: 'પ્રકરણો',
+      startReading: 'વાંચન શરૂ કરો',
+    },
     feed: {
       keyTakeaway: 'મુખ્ય શીખ',
       originalSource: 'મૂળ સ્ત્રોત',

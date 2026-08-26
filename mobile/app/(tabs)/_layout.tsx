@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
-import { BookOpen, Search, User } from 'lucide-react-native';
+import { BookOpen, Library, Search, User } from 'lucide-react-native';
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
 import { Colors } from '../../src/theme';
@@ -47,6 +47,13 @@ export default function TabsLayout() {
         options={{
           title: t.tabs.feed,
           tabBarIcon: ({ color, size }) => <BookOpen size={size || 22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="library"
+        options={{
+          title: t.tabs.library,
+          tabBarIcon: ({ color, size }) => <Library size={size || 22} color={color} />,
         }}
       />
       <Tabs.Screen

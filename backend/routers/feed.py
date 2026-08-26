@@ -24,7 +24,7 @@ async def get_feed(
             query = (
                 state.supabase
                 .table("cards")
-                .select("*, decks!inner(title, topic_tag)")
+                .select("*, decks!inner(title, topic_tag, book_id, sequence_order)")
                 .eq("status", "approved")
                 .eq("decks.topic_tag", topic)
                 .order("deck_id", desc=False)
@@ -36,7 +36,7 @@ async def get_feed(
             query = (
                 state.supabase
                 .table("cards")
-                .select("*, decks(title, topic_tag)")
+                .select("*, decks(title, topic_tag, book_id, sequence_order)")
                 .eq("status", "approved")
                 .order("deck_id", desc=False)
                 .order("sequence_order", desc=False)
@@ -53,6 +53,8 @@ async def get_feed(
         deck_info = row.get("decks")
         if deck_info and isinstance(deck_info, dict):
             row["deck_title"] = deck_info.get("title")
+            row["book_id"] = deck_info.get("book_id")
+            row["deck_sequence_order"] = deck_info.get("sequence_order")
         cards.append(CardOut(**row))
 
     logger.info("Feed served %d cards (limit=%d, offset=%d, topic=%s)", len(cards), limit, offset, topic)

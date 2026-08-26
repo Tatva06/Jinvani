@@ -68,6 +68,22 @@ def chunk_concept(pages: list[PageText], min_chunk_chars: int) -> list[Chunk]:
     return chunks
 
 
+def chunk_verbatim(pages: list[PageText], min_chunk_chars: int) -> list[Chunk]:
+    """
+    Type 3 (verbatim): reuses chunk_concept's exact paragraph-splitting —
+    same paragraph boundaries, same min_chunk_chars floor for discarding
+    scraps — but tags each chunk mode="verbatim" instead of "concept" so
+    downstream (structure.py, validate.py) routes it through the literal-
+    preservation prompt/rules instead of the compress-and-modernize ones.
+    Deliberately not a separate chunker — the boundary logic is identical,
+    only what happens to the text afterward differs.
+    """
+    chunks = chunk_concept(pages, min_chunk_chars)
+    for c in chunks:
+        c.mode = "verbatim"
+    return chunks
+
+
 def chunk_verse(pages: list[PageText], verse_regex: str) -> list[Chunk]:
     """
     Extracts ONLY the verse/sutra lines matched by verse_regex — from each
@@ -162,4 +178,6 @@ def chunk_pages(
         return chunk_verse(pages, verse_regex)
     if mode == "auto":
         return chunk_auto(pages, verse_regex, min_chunk_chars)
+    if mode == "verbatim":
+        return chunk_verbatim(pages, min_chunk_chars)
     raise ValueError(f"Unknown chunk mode: {mode}")
