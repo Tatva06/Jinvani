@@ -6,7 +6,27 @@ import { storage } from './mmkvStorage';
 
 const LANGUAGE_KEY = 'app-language';
 const DEFAULT_TOPIC_KEY = 'pref-default-topic';
+// Type 4 — "Today's Special": the date (YYYY-MM-DD) it was last shown.
+// Client-side "seen today" tracking — the backend has no per-user state
+// to hang this on (feed is unauthenticated), so this is the simplest
+// correct place for it, same MMKV convention as language/theme.
+const FEATURED_LAST_SHOWN_KEY = 'featured-last-shown-date';
 const PAGE_SIZE = 20;
+
+function todayStamp(): string {
+  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD, device-local-enough for "once a day"
+}
+
+/** True the first time this is called on a given calendar day; marks the
+ * day as shown as a side effect. Deliberately impure (check-and-set) —
+ * every caller wants exactly that: "may I show it, and if so, consider it
+ * shown now." */
+function claimFeaturedSlotForToday(): boolean {
+  const today = todayStamp();
+  if (storage.getString(FEATURED_LAST_SHOWN_KEY) === today) return false;
+  storage.set(FEATURED_LAST_SHOWN_KEY, today);
+  return true;
+}
 
 // Once the in-memory feed grows past this many cards, trim everything more
 // than WINDOW_RADIUS cards behind the active (currently-viewed) card. Cards
@@ -45,12 +65,27 @@ interface FeedState {
    * rendering rather than a separate detail view. */
   openSingleCard: (card: SeedCard) => void;
 
-  // ─── Book reading mode — plays one book's cards in real stored order
-  // (deck.sequence_order, then card.sequence_order), reusing this same
-  // feed screen/FlashList/JinvaniCard rather than a second card UI. ───
+  // ─── Sequential reading mode — plays one book's (or one deck/story's)
+  // cards in real stored order (deck.sequence_order, then
+  // card.sequence_order), reusing this same feed screen/FlashList/
+  // JinvaniCard rather than a second card UI. Covers both Book Detail's
+  // "Start Reading" (whole book, or verbatim-filtered if the book is
+  // verbatim content) and story reading (Type 5 — one deck, card_type
+  // filtered to 'narrative') — same mechanism, different scope/filter. ───
   isBookMode: boolean;
   bookModeTitle: string | null;
-  startBookReading: (bookId: string, bookTitle: string, startDeckSequenceOrder?: number) => Promise<void>;
+  startBookReading: (params: {
+    bookId: string;
+    title: string;
+    /** Scope to one deck instead of the whole book — used by story
+     * reading, where "the book" isn't the unit being read. */
+    deckId?: string;
+    /** Filter to one card_type — 'verbatim' for continuous verbatim
+     * reading, 'narrative' for a story. Omit for the original
+     * all-approved-cards book behavior. */
+    cardType?: string;
+    startDeckSequenceOrder?: number;
+  }) => Promise<void>;
   exitBookMode: () => void;
 }
 
@@ -150,8 +185,16 @@ export const useFeedStore = create<FeedState>((set, get) => ({
     try {
       const response = await fetchFeed(PAGE_SIZE, 0, topicFilter || undefined);
       if (response.cards && response.cards.length > 0) {
+        // Type 4 — "Today's Special": prepend once per calendar day. The
+        // backend already withholds `featured` for topic-filtered/later
+        // pages, so no need to re-check that here — only whether *this
+        // device* has already shown today's pick.
+        let cards = response.cards;
+        if (response.featured && claimFeaturedSlotForToday()) {
+          cards = [{ ...response.featured, isFeatured: true }, ...cards];
+        }
         set({
-          cards: response.cards,
+          cards,
           isLoading: false,
           hasMore: response.cards.length >= PAGE_SIZE,
           nextOffset: response.cards.length,
@@ -217,7 +260,7 @@ export const useFeedStore = create<FeedState>((set, get) => ({
     });
   },
 
-  startBookReading: async (bookId: string, bookTitle: string, startDeckSequenceOrder?: number) => {
+  startBookReading: async ({ bookId, title, deckId, cardType, startDeckSequenceOrder }) => {
     if (!get().isBookMode) {
       const s = get();
       preBookModeSnapshot = {
@@ -228,11 +271,12 @@ export const useFeedStore = create<FeedState>((set, get) => ({
         nextOffset: s.nextOffset,
       };
     }
-    set({ isLoading: true, error: null, isBookMode: true, bookModeTitle: bookTitle });
+    set({ isLoading: true, error: null, isBookMode: true, bookModeTitle: title });
 
     try {
-      // Books are small at this scale — one full fetch, no pagination.
-      const response = await fetchBookCards(bookId);
+      // Books (and single-deck stories) are small at this scale — one
+      // full fetch, no pagination.
+      const response = await fetchBookCards(bookId, deckId, cardType);
       const cards = response.cards;
       const startIndex = startDeckSequenceOrder != null
         ? Math.max(0, cards.findIndex((c) => c.deckSequenceOrder === startDeckSequenceOrder))
@@ -246,7 +290,7 @@ export const useFeedStore = create<FeedState>((set, get) => ({
         topicFilter: null,
       });
     } catch (err: any) {
-      console.warn('Failed to load book reading mode:', err?.message);
+      console.warn('Failed to load sequential reading mode:', err?.message);
       set({ isLoading: false, error: err?.message || 'Failed to load book' });
     }
   },

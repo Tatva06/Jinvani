@@ -1,5 +1,5 @@
-"""GET /api/v1/books, /api/v1/books/{book_id}, /api/v1/books/{book_id}/cards
-— public, no auth required.
+"""GET /api/v1/books, /api/v1/books/{book_id}, /api/v1/books/{book_id}/cards,
+/api/v1/stories, /api/v1/stories/{deck_id} — public, no auth required.
 
 A "book" is nothing more than the distinct set of decks.book_id values —
 there is no books table (schema.sql only has decks.book_id, a bare TEXT
@@ -7,8 +7,14 @@ with no FK) and no books.title column. Every book here is grouped and
 labeled entirely in Python from decks + cards, the same query-builder
 style as feed.py/search.py — no raw SQL.
 
-Only books/decks with at least one status="approved" card are ever
-surfaced, consistent with /feed and /search.
+A "story" (Type 5 / narrative) is likewise just one deck whose approved
+cards are card_type='narrative' — no separate stories table either, same
+convention. Reuses the same decks+cards fetch as books, grouped
+differently: by individual deck rather than by book_id, and filtered to
+narrative content.
+
+Only books/decks/stories with at least one status="approved" card are
+ever surfaced, consistent with /feed and /search.
 """
 
 from __future__ import annotations
@@ -16,13 +22,24 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from models import BookOut, BooksResponse, CardOut, DeckOut, FeedResponse
+from models import (
+    BookOut,
+    BooksResponse,
+    CardOut,
+    DeckOut,
+    FeedResponse,
+    StoriesResponse,
+    StoryDetailOut,
+    StoryOut,
+)
 
 logger = logging.getLogger("jinvani.books")
 router = APIRouter()
 
+NARRATIVE_CARD_TYPE = "narrative"
 
-async def _fetch_decks_and_approved_counts(supabase) -> tuple[list[dict], dict[str, int]]:
+
+async def _fetch_decks_and_approved_cards(supabase) -> tuple[list[dict], list[dict]]:
     decks = (
         await supabase.table("decks")
         .select("id, book_id, sequence_order, title, topic_tag")
@@ -31,19 +48,28 @@ async def _fetch_decks_and_approved_counts(supabase) -> tuple[list[dict], dict[s
 
     cards = (
         await supabase.table("cards")
-        .select("deck_id")
+        .select("deck_id, card_type")
         .eq("status", "approved")
         .execute()
     ).data or []
 
+    return decks, cards
+
+
+def _summarize_cards_by_deck(cards: list[dict]) -> tuple[dict[str, int], dict[str, set[str]]]:
     approved_by_deck: dict[str, int] = defaultdict(int)
+    card_types_by_deck: dict[str, set[str]] = defaultdict(set)
     for c in cards:
         approved_by_deck[c["deck_id"]] += 1
+        card_types_by_deck[c["deck_id"]].add(c["card_type"])
+    return approved_by_deck, card_types_by_deck
 
-    return decks, approved_by_deck
 
-
-def _group_into_books(decks: list[dict], approved_by_deck: dict[str, int]) -> list[BookOut]:
+def _group_into_books(
+    decks: list[dict],
+    approved_by_deck: dict[str, int],
+    card_types_by_deck: dict[str, set[str]],
+) -> list[BookOut]:
     by_book: dict[str, list[dict]] = defaultdict(list)
     for d in decks:
         by_book[d["book_id"]].append(d)
@@ -58,6 +84,7 @@ def _group_into_books(decks: list[dict], approved_by_deck: dict[str, int]) -> li
                 sequence_order=d["sequence_order"],
                 topic_tag=d.get("topic_tag"),
                 approved_card_count=approved_by_deck.get(d["id"], 0),
+                card_types=sorted(card_types_by_deck.get(d["id"], set())),
             )
             for d in deck_rows_sorted
         ]
@@ -69,7 +96,11 @@ def _group_into_books(decks: list[dict], approved_by_deck: dict[str, int]) -> li
         # No books.title exists — use the lowest-sequence_order deck's
         # title as a readable stand-in.
         title = deck_outs[0].title
-        books.append(BookOut(book_id=book_id, title=title, decks=deck_outs, approved_card_count=total))
+        book_card_types = sorted({ct for d in deck_outs for ct in d.card_types})
+        books.append(BookOut(
+            book_id=book_id, title=title, decks=deck_outs,
+            approved_card_count=total, card_types=book_card_types,
+        ))
 
     return books
 
@@ -79,12 +110,13 @@ async def list_books(request: Request) -> BooksResponse:
     from main import state
 
     try:
-        decks, approved_by_deck = await _fetch_decks_and_approved_counts(state.supabase)
+        decks, cards = await _fetch_decks_and_approved_cards(state.supabase)
     except Exception as exc:
         logger.exception("Supabase query failed for /books")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Books fetch failed.") from exc
 
-    books = _group_into_books(decks, approved_by_deck)
+    approved_by_deck, card_types_by_deck = _summarize_cards_by_deck(cards)
+    books = _group_into_books(decks, approved_by_deck, card_types_by_deck)
     books.sort(key=lambda b: b.title.lower())
 
     logger.info("Books served %d books", len(books))
@@ -96,7 +128,7 @@ async def get_book(request: Request, book_id: str) -> BookOut:
     from main import state
 
     try:
-        decks, approved_by_deck = await _fetch_decks_and_approved_counts(state.supabase)
+        decks, cards = await _fetch_decks_and_approved_cards(state.supabase)
     except Exception as exc:
         logger.exception("Supabase query failed for /books/%s", book_id)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Book fetch failed.") from exc
@@ -105,7 +137,8 @@ async def get_book(request: Request, book_id: str) -> BookOut:
     if not decks_for_book:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found.")
 
-    books = _group_into_books(decks_for_book, approved_by_deck)
+    approved_by_deck, card_types_by_deck = _summarize_cards_by_deck(cards)
+    books = _group_into_books(decks_for_book, approved_by_deck, card_types_by_deck)
     if not books:
         # Decks exist for this book_id, but none have any approved cards.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found.")
@@ -122,6 +155,11 @@ async def get_book_cards(
     request: Request,
     book_id: str,
     deck_id: str | None = Query(default=None, description="Optional — scope to a single deck/chapter instead of the whole book."),
+    card_type: str | None = Query(
+        default=None,
+        description="Optional — scope to one card_type (e.g. 'verbatim' for continuous verbatim reading, "
+                     "'narrative' for a story). Omit to get all approved cards regardless of type, as before.",
+    ),
 ) -> FeedResponse:
     from main import state
 
@@ -144,13 +182,15 @@ async def get_book_cards(
         deck_info_by_id: dict[str, dict] = {d["id"]: d for d in deck_rows}
         deck_ids = list(deck_order.keys())
 
-        card_rows = (
-            await state.supabase.table("cards")
+        cards_query = (
+            state.supabase.table("cards")
             .select("*")
             .eq("status", "approved")
             .in_("deck_id", deck_ids)
-            .execute()
-        ).data or []
+        )
+        if card_type:
+            cards_query = cards_query.eq("card_type", card_type)
+        card_rows = (await cards_query.execute()).data or []
     except HTTPException:
         raise
     except Exception as exc:
@@ -172,5 +212,88 @@ async def get_book_cards(
             row["deck_sequence_order"] = deck_info.get("sequence_order")
         cards.append(CardOut(**row))
 
-    logger.info("Book cards served %d cards (book_id=%s, deck_id=%s)", len(cards), book_id, deck_id)
+    logger.info(
+        "Book cards served %d cards (book_id=%s, deck_id=%s, card_type=%s)",
+        len(cards), book_id, deck_id, card_type,
+    )
     return FeedResponse(cards=cards, count=len(cards))
+
+
+@router.get("/stories", response_model=StoriesResponse, summary="List narrative decks ('stories') with approved cards")
+async def list_stories(request: Request) -> StoriesResponse:
+    from main import state
+
+    try:
+        decks, cards = await _fetch_decks_and_approved_cards(state.supabase)
+    except Exception as exc:
+        logger.exception("Supabase query failed for /stories")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Stories fetch failed.") from exc
+
+    approved_by_deck, card_types_by_deck = _summarize_cards_by_deck(cards)
+    deck_by_id = {d["id"]: d for d in decks}
+
+    stories = [
+        StoryOut(
+            deck_id=deck_id,
+            book_id=deck_by_id[deck_id]["book_id"],
+            title=deck_by_id[deck_id]["title"],
+            card_count=approved_by_deck[deck_id],
+        )
+        for deck_id, types in card_types_by_deck.items()
+        # A deck counts as a "story" if it has any narrative cards at all —
+        # in practice a deck is dedicated to one ingestion mode, so this is
+        # effectively "the whole deck", but this doesn't assume that.
+        if NARRATIVE_CARD_TYPE in types and deck_id in deck_by_id
+    ]
+    stories.sort(key=lambda s: s.title.lower())
+
+    logger.info("Stories served %d stories", len(stories))
+    return StoriesResponse(stories=stories)
+
+
+@router.get("/stories/{deck_id}", response_model=StoryDetailOut, summary="Get one story's preview (title, card count, first card)")
+async def get_story(request: Request, deck_id: str) -> StoryDetailOut:
+    from main import state
+
+    try:
+        deck_rows = (
+            await state.supabase.table("decks")
+            .select("id, book_id, sequence_order, title")
+            .eq("id", deck_id)
+            .limit(1)
+            .execute()
+        ).data or []
+        if not deck_rows:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Story not found.")
+        deck_row = deck_rows[0]
+
+        card_rows = (
+            await state.supabase.table("cards")
+            .select("*")
+            .eq("deck_id", deck_id)
+            .eq("status", "approved")
+            .eq("card_type", NARRATIVE_CARD_TYPE)
+            .order("sequence_order", desc=False)
+            .execute()
+        ).data or []
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Supabase query failed for /stories/%s", deck_id)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Story fetch failed.") from exc
+
+    if not card_rows:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Story has no approved narrative cards.")
+
+    first_row = dict(card_rows[0])
+    first_row["deck_title"] = deck_row.get("title")
+    first_row["book_id"] = deck_row.get("book_id")
+    first_row["deck_sequence_order"] = deck_row.get("sequence_order")
+
+    return StoryDetailOut(
+        deck_id=deck_row["id"],
+        book_id=deck_row["book_id"],
+        title=deck_row["title"],
+        card_count=len(card_rows),
+        preview_card=CardOut(**first_row),
+    )

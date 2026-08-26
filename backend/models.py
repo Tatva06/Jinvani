@@ -26,6 +26,12 @@ class CardOut(BaseModel):
 class FeedResponse(BaseModel):
     cards: list[CardOut]
     count: int
+    # Type 4 — "Today's Special": one pinned card the main feed can show
+    # first. Only ever populated for the first, unfiltered page (see
+    # feed.py) — a separate field rather than cards[0], so pagination math
+    # in the client (dedupe, nextOffset, hasMore) never has to know this
+    # exists. None when there's nothing to feature.
+    featured: CardOut | None = None
 
 
 class DeckOut(BaseModel):
@@ -34,6 +40,10 @@ class DeckOut(BaseModel):
     sequence_order: int
     topic_tag: str | None = None
     approved_card_count: int
+    # Distinct card_type values among this deck's approved cards — lets the
+    # client tell a verbatim deck, a narrative ("story") deck, and a
+    # regular concept/verse deck apart without a second round-trip.
+    card_types: list[str] = []
 
 
 class BookOut(BaseModel):
@@ -44,10 +54,35 @@ class BookOut(BaseModel):
     title: str
     decks: list[DeckOut]
     approved_card_count: int
+    # Union of every deck's card_types — lets Book Detail decide, e.g.,
+    # whether "Start Reading" should launch verbatim continuous-reading
+    # mode instead of the normal all-approved-cards book order.
+    card_types: list[str] = []
 
 
 class BooksResponse(BaseModel):
     books: list[BookOut]
+
+
+class StoryOut(BaseModel):
+    """Type 5 — one narrative deck ('story'). A story is just a deck whose
+    approved cards are card_type='narrative'; there's no separate stories
+    table, same non-table-per-concept convention as BookOut."""
+    deck_id: UUID
+    book_id: str
+    title: str
+    card_count: int
+
+
+class StoryDetailOut(StoryOut):
+    # First card in the story, for the "decide to read or skip" preview
+    # screen (title/count/takeaway) — full CardOut so the client can pick
+    # the right language, same as any other card.
+    preview_card: CardOut | None = None
+
+
+class StoriesResponse(BaseModel):
+    stories: list[StoryOut]
 
 
 class BookmarkRequest(BaseModel):

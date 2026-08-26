@@ -1,16 +1,74 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight } from 'lucide-react-native';
+import { BookOpenText, ChevronRight } from 'lucide-react-native';
 
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
 import { Colors } from '../../src/theme';
 import { CHROME } from '../../src/i18n/chrome';
 import { scriptFontFamily } from '../../src/utils/fonts';
-import { fetchBooks } from '../../src/api/client';
-import { Book } from '../../src/types';
+import { fetchBooks, fetchStories } from '../../src/api/client';
+import { Book, Story } from '../../src/types';
+
+// Stories (Type 5 / narrative) live as a section within this same Library
+// screen rather than a separate tab or list: they're browsed the same
+// way books are ("long-form content, read in order"), and at this scale
+// a handful of stories don't earn a whole extra tab in an already-4-tab
+// bar. A horizontal strip (not a second FlatList — RN warns/misbehaves
+// nesting virtualized lists) keeps it visually distinct from the
+// vertical books list below it without a second screen to navigate.
+function StoriesSection({
+  stories,
+  colors,
+  language,
+  t,
+  onSelect,
+}: {
+  stories: Story[];
+  colors: (typeof Colors)['dark'];
+  language: ReturnType<typeof useFeedStore.getState>['language'];
+  t: (typeof CHROME)['en'];
+  onSelect: (story: Story) => void;
+}) {
+  return (
+    <View style={styles.storiesSection}>
+      <Text style={[styles.sectionHeader, { color: colors.accent, fontFamily: scriptFontFamily(language, '700') }]}>
+        {t.library.storiesTitle}
+      </Text>
+      {stories.length === 0 ? (
+        <Text style={[styles.storiesEmpty, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
+          {t.library.storiesEmpty}
+        </Text>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesRow}>
+          {stories.map((story) => (
+            <Pressable
+              key={story.deckId}
+              onPress={() => onSelect(story)}
+              style={({ pressed }) => [
+                styles.storyCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                pressed && { opacity: 0.75 },
+              ]}
+              accessibilityLabel={`Open story: ${story.title}, ${story.cardCount} cards`}
+              accessibilityRole="button"
+            >
+              <BookOpenText size={20} color={colors.accent} />
+              <Text numberOfLines={2} style={[styles.storyTitle, { color: colors.text, fontFamily: scriptFontFamily(language, '600') }]}>
+                {story.title}
+              </Text>
+              <Text style={[styles.storyMeta, { color: colors.textSecondary, fontFamily: scriptFontFamily(language, '400') }]}>
+                {story.cardCount} {t.library.cardsLabel}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
 
 export default function LibraryScreen() {
   const router = useRouter();
@@ -21,15 +79,19 @@ export default function LibraryScreen() {
   const t = CHROME[language];
 
   const [books, setBooks] = useState<Book[]>([]);
+  const [stories, setStories] = useState<Story[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setIsLoading(true);
     setError(null);
-    fetchBooks()
-      .then(setBooks)
-      .catch((err: any) => setError(err?.message || 'Failed to load books'))
+    Promise.all([fetchBooks(), fetchStories()])
+      .then(([b, s]) => {
+        setBooks(b);
+        setStories(s);
+      })
+      .catch((err: any) => setError(err?.message || 'Failed to load library'))
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -59,6 +121,15 @@ export default function LibraryScreen() {
           data={books}
           keyExtractor={(b) => b.bookId}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 40 }]}
+          ListHeaderComponent={
+            <StoriesSection
+              stories={stories}
+              colors={colors}
+              language={language}
+              t={t}
+              onSelect={(story) => router.push({ pathname: '/story/[deckId]', params: { deckId: story.deckId } })}
+            />
+          }
           renderItem={({ item, index }) => {
             const topicTag = item.decks.find((d) => d.topicTag)?.topicTag;
             // Cycle through a curated set of accent-adjacent badge colors
@@ -121,4 +192,11 @@ const styles = StyleSheet.create({
   bookMeta: { fontSize: 12.5 },
   chip: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, marginTop: 2 },
   chipText: { fontSize: 10.5, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
+  storiesSection: { marginBottom: 18 },
+  sectionHeader: { fontSize: 11.5, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 12 },
+  storiesEmpty: { fontSize: 13 },
+  storiesRow: { gap: 10, paddingRight: 4 },
+  storyCard: { width: 150, borderWidth: 1, borderRadius: 16, padding: 14, gap: 8 },
+  storyTitle: { fontSize: 13.5, lineHeight: 18 },
+  storyMeta: { fontSize: 11.5 },
 });

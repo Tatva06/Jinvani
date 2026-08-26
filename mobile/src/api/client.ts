@@ -1,10 +1,13 @@
 import { API_V1 } from '../constants';
-import { Book, Language, SeedCard } from '../types';
+import { Book, Language, SeedCard, Story, StoryDetail } from '../types';
 import { normalizeContent } from '../utils/content';
 
 export interface FeedResponse {
   cards: SeedCard[];
   count: number;
+  /** Type 4 — "Today's Special", only ever present on the first,
+   * unfiltered page. null/undefined when there's nothing to feature. */
+  featured?: SeedCard | null;
 }
 
 const FETCH_HEADERS = {
@@ -31,13 +34,24 @@ function mapBook(b: any): Book {
     bookId: b.book_id,
     title: b.title,
     approvedCardCount: b.approved_card_count,
+    cardTypes: b.card_types || [],
     decks: (b.decks || []).map((d: any) => ({
       id: d.id,
       title: d.title,
       sequenceOrder: d.sequence_order,
       topicTag: d.topic_tag ?? null,
       approvedCardCount: d.approved_card_count,
+      cardTypes: d.card_types || [],
     })),
+  };
+}
+
+function mapStory(s: any): Story {
+  return {
+    deckId: s.deck_id,
+    bookId: s.book_id,
+    title: s.title,
+    cardCount: s.card_count,
   };
 }
 
@@ -64,6 +78,7 @@ export async function fetchFeed(
   return {
     cards,
     count: data.count ?? cards.length,
+    featured: data.featured ? mapCard(data.featured) : null,
   };
 }
 
@@ -108,10 +123,13 @@ export async function fetchBook(bookId: string): Promise<Book> {
   return mapBook(await res.json());
 }
 
-export async function fetchBookCards(bookId: string, deckId?: string): Promise<FeedResponse> {
+export async function fetchBookCards(bookId: string, deckId?: string, cardType?: string): Promise<FeedResponse> {
   const url = new URL(`${API_V1}/books/${encodeURIComponent(bookId)}/cards`);
   if (deckId) {
     url.searchParams.set('deck_id', deckId);
+  }
+  if (cardType) {
+    url.searchParams.set('card_type', cardType);
   }
   const res = await fetch(url.toString(), { headers: FETCH_HEADERS });
   if (!res.ok) {
@@ -120,4 +138,25 @@ export async function fetchBookCards(bookId: string, deckId?: string): Promise<F
   const data = await res.json();
   const cards: SeedCard[] = (data.cards || []).map(mapCard);
   return { cards, count: data.count ?? cards.length };
+}
+
+export async function fetchStories(): Promise<Story[]> {
+  const res = await fetch(`${API_V1}/stories`, { headers: FETCH_HEADERS });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch stories: ${res.status} ${res.statusText}`);
+  }
+  const data = await res.json();
+  return (data.stories || []).map(mapStory);
+}
+
+export async function fetchStory(deckId: string): Promise<StoryDetail> {
+  const res = await fetch(`${API_V1}/stories/${encodeURIComponent(deckId)}`, { headers: FETCH_HEADERS });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch story: ${res.status} ${res.statusText}`);
+  }
+  const data = await res.json();
+  return {
+    ...mapStory(data),
+    previewCard: data.preview_card ? mapCard(data.preview_card) : null,
+  };
 }

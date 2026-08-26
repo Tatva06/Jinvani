@@ -40,9 +40,23 @@ export default function BookDetailScreen() {
     load();
   }, [load]);
 
+  // A book whose approved cards are (any) verbatim content reads as
+  // continuous verbatim reading instead of the normal all-approved-cards
+  // book order — Phase C: "if that book has verbatim-type cards, [Start
+  // Reading] is what it launches." Mixed-type books are rare at this
+  // scale (one ingestion run == one card_type per deck in practice); this
+  // filters to verbatim cards specifically rather than assuming the whole
+  // book is uniform.
+  const isVerbatimBook = book?.cardTypes.includes('verbatim') ?? false;
+
   const handleStartReading = async (startDeckSequenceOrder?: number) => {
     if (!book) return;
-    await startBookReading(book.bookId, book.title, startDeckSequenceOrder);
+    await startBookReading({
+      bookId: book.bookId,
+      title: book.title,
+      cardType: isVerbatimBook ? 'verbatim' : undefined,
+      startDeckSequenceOrder,
+    });
     router.push('/(tabs)');
   };
 

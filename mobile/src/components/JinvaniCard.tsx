@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
-import { RotateCw, Bookmark } from 'lucide-react-native';
+import { RotateCw, Bookmark, Sparkles } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { Colors } from '../theme';
@@ -137,11 +137,23 @@ export const JinvaniCard = React.memo(function JinvaniCard({
         <View style={[styles.cardInner, { paddingTop: 20, paddingBottom: insets.bottom + 80 }]}>
           {/* Top */}
           <View style={styles.topSection}>
-            <View style={[styles.deckBadge, { backgroundColor: c.accentMuted, borderColor: c.accentBorder }]}>
-              <Text style={[styles.deckBadgeText, { color: c.accent }]} numberOfLines={1}>
-                {card.deckTitle}
-              </Text>
-            </View>
+            {card.isFeatured ? (
+              // Type 4 — "Today's Special": a label/badge is enough, reusing
+              // this same card rather than a second card component (only
+              // ever true for the one pinned card useFeedStore prepends).
+              <View style={[styles.featuredBadge, { backgroundColor: c.accent }]}>
+                <Sparkles size={11} color={themeMode === 'dark' ? '#0A0A0F' : '#FFFFFF'} />
+                <Text style={[styles.featuredBadgeText, { color: themeMode === 'dark' ? '#0A0A0F' : '#FFFFFF' }]} numberOfLines={1}>
+                  {CHROME[language].feed.todaysSpecial}
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.deckBadge, { backgroundColor: c.accentMuted, borderColor: c.accentBorder }]}>
+                <Text style={[styles.deckBadgeText, { color: c.accent }]} numberOfLines={1}>
+                  {card.deckTitle}
+                </Text>
+              </View>
+            )}
             <Text style={[styles.cardIndexText, { color: c.textMuted }]}>{card.cardIndex}</Text>
           </View>
 
@@ -260,6 +272,8 @@ const styles = StyleSheet.create({
   topSection: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   deckBadge: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5, maxWidth: '75%' },
   deckBadgeText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase' },
+  featuredBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5, maxWidth: '75%' },
+  featuredBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
   cardIndexText: { fontSize: 11, fontWeight: '500', letterSpacing: 0.4 },
   middleSection: { flex: 1, justifyContent: 'center', paddingVertical: 12 },
   cardTitle: { fontSize: 25, fontWeight: '700', lineHeight: 33, letterSpacing: -0.3, marginBottom: 14 },

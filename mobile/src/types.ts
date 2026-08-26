@@ -12,7 +12,7 @@ export interface CardContent {
 }
 
 // ─── Seed Card ────────────────────────────────────────────────────────────────
-export type CardType = 'summary' | 'chunked_verse';
+export type CardType = 'summary' | 'chunked_verse' | 'verbatim' | 'digest' | 'narrative';
 
 export interface SeedCard {
   /** Unique stable identifier */
@@ -42,6 +42,10 @@ export interface SeedCard {
    * distinct from cardType.sequence_order (the card's position within
    * its own deck/chapter). */
   deckSequenceOrder?: number;
+  /** Type 4 — "Today's Special". Client-side-only flag set by
+   * useFeedStore when it prepends the API's `featured` card; never comes
+   * from the API response itself. Drives JinvaniCard's badge. */
+  isFeatured?: boolean;
 }
 
 // ─── Book / Library ─────────────────────────────────────────────────────────────
@@ -51,6 +55,8 @@ export interface DeckSummary {
   sequenceOrder: number;
   topicTag: string | null;
   approvedCardCount: number;
+  /** Distinct card_type values among this deck's approved cards. */
+  cardTypes: CardType[];
 }
 
 export interface Book {
@@ -60,4 +66,20 @@ export interface Book {
   title: string;
   decks: DeckSummary[];
   approvedCardCount: number;
+  /** Union of every deck's cardTypes. */
+  cardTypes: CardType[];
+}
+
+// ─── Stories (Type 5 / narrative) ────────────────────────────────────────────
+export interface Story {
+  deckId: string;
+  bookId: string;
+  title: string;
+  cardCount: number;
+}
+
+export interface StoryDetail extends Story {
+  /** First card in reading order — used for the "decide to read or skip"
+   * preview (title/count/takeaway) before committing to the story. */
+  previewCard: SeedCard | null;
 }

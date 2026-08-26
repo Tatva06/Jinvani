@@ -33,10 +33,17 @@ export interface ChromeStrings {
     chaptersLabel: string;
     chaptersTitle: string;
     startReading: string;
+    storiesTitle: string;
+    storiesEmpty: string;
+  };
+  story: {
+    startReading: string;
+    back: string;
   };
   feed: {
     keyTakeaway: string;
     originalSource: string;
+    todaysSpecial: string;
   };
   search: {
     placeholder: string;
@@ -102,10 +109,17 @@ export const CHROME: Record<Language, ChromeStrings> = {
       chaptersLabel: 'chapters',
       chaptersTitle: 'Chapters',
       startReading: 'Start Reading',
+      storiesTitle: 'Stories',
+      storiesEmpty: 'No stories yet.',
+    },
+    story: {
+      startReading: 'Start Reading',
+      back: 'Back',
     },
     feed: {
       keyTakeaway: 'Key Takeaway',
       originalSource: 'Original Source',
+      todaysSpecial: "Today's Special",
     },
     search: {
       placeholder: 'Search scripture cards...',
@@ -169,10 +183,17 @@ export const CHROME: Record<Language, ChromeStrings> = {
       chaptersLabel: 'अध्याय',
       chaptersTitle: 'अध्याय',
       startReading: 'पढ़ना शुरू करें',
+      storiesTitle: 'कहानियाँ',
+      storiesEmpty: 'अभी कोई कहानी नहीं है।',
+    },
+    story: {
+      startReading: 'पढ़ना शुरू करें',
+      back: 'वापस',
     },
     feed: {
       keyTakeaway: 'मुख्य सीख',
       originalSource: 'मूल स्रोत',
+      todaysSpecial: 'आज का विशेष',
     },
     search: {
       placeholder: 'शास्त्र कार्ड खोजें...',
@@ -236,10 +257,17 @@ export const CHROME: Record<Language, ChromeStrings> = {
       chaptersLabel: 'પ્રકરણો',
       chaptersTitle: 'પ્રકરણો',
       startReading: 'વાંચન શરૂ કરો',
+      storiesTitle: 'વાર્તાઓ',
+      storiesEmpty: 'હજુ કોઈ વાર્તા નથી.',
+    },
+    story: {
+      startReading: 'વાંચન શરૂ કરો',
+      back: 'પાછળ',
     },
     feed: {
       keyTakeaway: 'મુખ્ય શીખ',
       originalSource: 'મૂળ સ્ત્રોત',
+      todaysSpecial: 'આજની ખાસ',
     },
     search: {
       placeholder: 'શાસ્ત્ર કાર્ડ શોધો...',
