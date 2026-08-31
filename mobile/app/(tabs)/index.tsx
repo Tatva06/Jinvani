@@ -14,6 +14,7 @@ import { X } from 'lucide-react-native';
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
 import { Colors } from '../../src/theme';
+import { SCREEN_PADDING } from '../../src/theme/spacing';
 import { Language, SeedCard } from '../../src/types';
 import { JinvaniCard } from '../../src/components/JinvaniCard';
 import { TopicStrip } from '../../src/components/TopicStrip';
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: 16,
+    paddingHorizontal: SCREEN_PADDING,
     paddingBottom: 8,
   },
   headerSpacer: { flex: 1 },
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     borderRadius: 20,
-    marginHorizontal: 16,
+    marginHorizontal: SCREEN_PADDING,
     paddingHorizontal: 14,
     paddingVertical: 8,
     marginBottom: 8,

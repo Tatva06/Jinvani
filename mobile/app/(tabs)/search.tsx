@@ -7,6 +7,7 @@ import { Search as SearchIcon } from 'lucide-react-native';
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
 import { Colors } from '../../src/theme';
+import { SCREEN_PADDING } from '../../src/theme/spacing';
 import { CHROME } from '../../src/i18n/chrome';
 import { searchCards } from '../../src/api/client';
 import { SeedCard } from '../../src/types';
@@ -141,7 +142,7 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, paddingHorizontal: 20 },
+  root: { flex: 1, paddingHorizontal: SCREEN_PADDING },
   inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 48, marginBottom: 16 },
   input: { flex: 1, fontSize: 15 },
   initialState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 16, paddingBottom: 80 },
@@ -151,7 +152,7 @@ const styles = StyleSheet.create({
   centerBlock: { alignItems: 'center', paddingVertical: 24, gap: 8 },
   statusText: { fontSize: 13 },
   listContent: { paddingBottom: 40, gap: 10 },
-  resultRow: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 4 },
+  resultRow: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 4 },
   resultTitle: { fontSize: 15, fontWeight: '600' },
   resultBody: { fontSize: 13, lineHeight: 18 },
   resultDeck: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4 },

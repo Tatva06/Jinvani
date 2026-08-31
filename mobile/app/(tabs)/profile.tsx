@@ -19,6 +19,8 @@ import { useFeedStore } from '../../src/store/useFeedStore';
 import { useSavedStore } from '../../src/store/useSavedStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { Colors } from '../../src/theme';
+import { SCREEN_PADDING, SPACING } from '../../src/theme/spacing';
+import { TYPE } from '../../src/theme/typography';
 import { Language, SeedCard } from '../../src/types';
 import { SettingsRow } from '../../src/components/SettingsRow';
 import { TopicStrip } from '../../src/components/TopicStrip';
@@ -291,11 +293,11 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20 },
-  title: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5, marginBottom: 20 },
-  sectionHeader: { fontSize: 11.5, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 10, marginTop: 4 },
+  scrollContent: { paddingHorizontal: SCREEN_PADDING },
+  title: { ...TYPE.screenTitle, marginBottom: 20 },
+  sectionHeader: { ...TYPE.sectionLabel, marginBottom: SPACING.md, marginTop: 4 },
   subLabel: { fontSize: 12.5, marginBottom: 10, marginTop: -4 },
-  topicStripInline: { marginHorizontal: -20, marginBottom: 16 },
+  topicStripInline: { marginHorizontal: -SCREEN_PADDING, marginBottom: 16 },
   loginBox: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 16 },
   loginBoxText: { flex: 1, gap: 4 },
   loginPrompt: { fontSize: 13, lineHeight: 18 },
@@ -303,7 +305,7 @@ const styles = StyleSheet.create({
   savedLoading: { marginBottom: 10 },
   emptyBox: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 10 },
   emptyText: { fontSize: 13 },
-  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
+  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
   savedRowText: { fontSize: 14, flex: 1 },
   langGroup: { borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 10 },
   langRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },

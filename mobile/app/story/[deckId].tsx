@@ -7,6 +7,8 @@ import { BookOpenText, ChevronLeft, Play } from 'lucide-react-native';
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
 import { Colors } from '../../src/theme';
+import { SCREEN_PADDING } from '../../src/theme/spacing';
+import { TYPE } from '../../src/theme/typography';
 import { CHROME } from '../../src/i18n/chrome';
 import { scriptFontFamily } from '../../src/utils/fonts';
 import { fetchStory } from '../../src/api/client';
@@ -142,18 +144,18 @@ export default function StoryPreviewScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: 20, marginBottom: 4 },
+  header: { paddingHorizontal: SCREEN_PADDING, marginBottom: 4 },
   backButton: { alignSelf: 'flex-start', padding: 4 },
   centerBlock: { marginTop: 60 },
-  errorText: { fontSize: 13, paddingHorizontal: 20, marginTop: 20 },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
+  errorText: { fontSize: 13, paddingHorizontal: SCREEN_PADDING, marginTop: 20 },
+  scrollContent: { paddingHorizontal: SCREEN_PADDING, paddingBottom: 40 },
   storyHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, marginBottom: 20, marginTop: 8 },
   storyHeaderText: { flex: 1, justifyContent: 'center' },
   iconBox: { width: 56, height: 56, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3, marginBottom: 4, lineHeight: 28 },
+  title: { ...TYPE.detailTitle, marginBottom: 4 },
   meta: { fontSize: 13 },
   previewBox: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 28 },
-  previewLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 8 },
+  previewLabel: { ...TYPE.sectionLabel, marginBottom: 8 },
   previewText: { fontSize: 15, lineHeight: 22 },
   startButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingVertical: 13, borderRadius: 26, alignSelf: 'flex-start' },
   startButtonText: { fontSize: 15, fontWeight: '700' },

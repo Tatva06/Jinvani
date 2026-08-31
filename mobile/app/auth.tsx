@@ -18,6 +18,8 @@ import { useThemeStore } from '../src/store/useThemeStore';
 import { useFeedStore } from '../src/store/useFeedStore';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { Colors } from '../src/theme';
+import { SCREEN_PADDING } from '../src/theme/spacing';
+import { TYPE } from '../src/theme/typography';
 import { CHROME } from '../src/i18n/chrome';
 import { scriptFontFamily } from '../src/utils/fonts';
 
@@ -157,9 +159,9 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, paddingHorizontal: 24 },
+  root: { flex: 1, paddingHorizontal: SCREEN_PADDING },
   closeButton: { position: 'absolute', right: 20, zIndex: 10, padding: 4 },
-  title: { fontSize: 26, fontWeight: '700', letterSpacing: -0.5, marginBottom: 28, marginTop: 52 },
+  title: { ...TYPE.modalTitle, marginBottom: 28, marginTop: 52 },
   label: { fontSize: 12.5, fontWeight: '600', marginBottom: 6, marginTop: 14 },
   // password field with eye toggle
   inputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, height: 46 },

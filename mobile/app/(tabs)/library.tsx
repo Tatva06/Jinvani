@@ -7,6 +7,8 @@ import { BookOpenText, ChevronRight } from 'lucide-react-native';
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
 import { Colors } from '../../src/theme';
+import { SCREEN_PADDING, SPACING } from '../../src/theme/spacing';
+import { TYPE } from '../../src/theme/typography';
 import { CHROME } from '../../src/i18n/chrome';
 import { scriptFontFamily } from '../../src/utils/fonts';
 import { fetchBooks, fetchStories } from '../../src/api/client';
@@ -178,12 +180,12 @@ export default function LibraryScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: 20 },
-  title: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5, marginBottom: 6 },
+  header: { paddingHorizontal: SCREEN_PADDING },
+  title: { ...TYPE.screenTitle, marginBottom: 6 },
   subtitle: { fontSize: 14, lineHeight: 20, marginBottom: 20 },
   centerBlock: { marginTop: 40 },
-  errorText: { fontSize: 13, paddingHorizontal: 20, marginTop: 20 },
-  listContent: { paddingHorizontal: 20, gap: 10 },
+  errorText: { fontSize: 13, paddingHorizontal: SCREEN_PADDING, marginTop: 20 },
+  listContent: { paddingHorizontal: SCREEN_PADDING, gap: 10 },
   bookRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 16, borderWidth: 1 },
   iconBox: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   iconNumber: { fontSize: 16, fontWeight: '800' },
@@ -193,7 +195,7 @@ const styles = StyleSheet.create({
   chip: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, marginTop: 2 },
   chipText: { fontSize: 10.5, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
   storiesSection: { marginBottom: 18 },
-  sectionHeader: { fontSize: 11.5, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 12 },
+  sectionHeader: { ...TYPE.sectionLabel, marginBottom: SPACING.md },
   storiesEmpty: { fontSize: 13 },
   storiesRow: { gap: 10, paddingRight: 4 },
   storyCard: { width: 150, borderWidth: 1, borderRadius: 16, padding: 14, gap: 8 },
