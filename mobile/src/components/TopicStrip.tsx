@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { TOPICS } from '../data/topics';
 import { Colors } from '../theme';
+import { SCREEN_PADDING, SPACING } from '../theme/spacing';
 import { Language } from '../types';
 import { CHROME } from '../i18n/chrome';
 import { scriptFontFamily } from '../utils/fonts';
@@ -28,6 +29,9 @@ function Chip({
         backgroundColor: active ? colors.accent : colors.chipBg,
         borderColor: active ? colors.accent : colors.chipBorder,
       }]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
     >
       <Text
         numberOfLines={1}
@@ -88,7 +92,13 @@ export function TopicStrip({
 }
 
 const styles = StyleSheet.create({
-  container: { flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
-  chip: { paddingHorizontal: 13, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
+  // Outer edge now matches the app's standard screen padding (was 16, one
+  // of the drifted values from the earlier consistency pass) — every
+  // screen embedding this strip (feed header, Profile > Personalize Feed)
+  // now lines up at the same 20px edge.
+  container: { flexDirection: 'row', gap: SPACING.sm, paddingHorizontal: SCREEN_PADDING },
+  // Horizontal padding tightened from 13 — at 13 the pill read as
+  // over-padded/circular per feedback, especially on short topic names.
+  chip: { paddingHorizontal: SPACING.sm, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
   chipText: { fontSize: 12, letterSpacing: 0.2, maxWidth: 160 },
 });

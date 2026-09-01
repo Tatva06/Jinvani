@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -12,12 +13,14 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Bell, Bookmark, Info, LogIn, LogOut, MessageCircle, Moon, Share2, Sun, User as UserIcon } from 'lucide-react-native';
 
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
 import { useSavedStore } from '../../src/store/useSavedStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
+import { useReminderStore } from '../../src/store/useReminderStore';
 import { Colors } from '../../src/theme';
 import { SCREEN_PADDING, SPACING } from '../../src/theme/spacing';
 import { TYPE } from '../../src/theme/typography';
@@ -39,6 +42,12 @@ const LANGUAGES: { code: Language; label: string; nativeLabel: string }[] = [
   { code: 'gu', label: 'Gujarati', nativeLabel: 'ગુજરાતી' },
 ];
 
+function formatTime(hour: number, minute: number): string {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -57,6 +66,19 @@ export default function ProfileScreen() {
   const user = useAuthStore((s) => s.user);
   const isInitializingAuth = useAuthStore((s) => s.isInitializing);
   const signOut = useAuthStore((s) => s.signOut);
+
+  const reminderEnabled = useReminderStore((s) => s.enabled);
+  const reminderHour = useReminderStore((s) => s.hour);
+  const reminderMinute = useReminderStore((s) => s.minute);
+  const reminderPermissionDenied = useReminderStore((s) => s.permissionDenied);
+  const setReminderEnabled = useReminderStore((s) => s.setEnabled);
+  const setReminderTime = useReminderStore((s) => s.setTime);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const reminderTimeAsDate = React.useMemo(() => {
+    const d = new Date();
+    d.setHours(reminderHour, reminderMinute, 0, 0);
+    return d;
+  }, [reminderHour, reminderMinute]);
 
   const t = CHROME[language];
   const isDark = theme === 'dark';
@@ -131,18 +153,37 @@ export default function ProfileScreen() {
           )
         )}
 
-        {/* — Saved (real, cross-device — requires login) — */}
-        {isLoggedIn && (
+        {/* — Saved (real, cross-device — requires login). Always visible
+             (not conditionally hidden when logged out) with a distinct
+             logged-out prompt — otherwise a logged-out user wouldn't even
+             know this section exists, and its absence could easily read
+             as "identical to nothing saved" rather than as a deliberate
+             login gate. — */}
+        {!isInitializingAuth && (
           <>
             <Text style={[styles.sectionHeader, { color: colors.accent, fontFamily: scriptFontFamily(language, '700') }]}>
               {t.profile.saved}
             </Text>
-            {isLoadingSaved ? (
+            {!isLoggedIn ? (
+              <View style={[styles.emptyBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <LogIn size={18} color={colors.accent} style={styles.emptyBoxIcon} />
+                <Text style={[styles.emptyTitle, { color: colors.text, fontFamily: scriptFontFamily(language, '600') }]}>
+                  {t.profile.savedLoggedOutTitle}
+                </Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
+                  {t.profile.savedLoggedOutSubtitle}
+                </Text>
+              </View>
+            ) : isLoadingSaved ? (
               <ActivityIndicator color={colors.accent} style={styles.savedLoading} />
             ) : savedCards.length === 0 ? (
               <View style={[styles.emptyBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.emptyText, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
+                <Bookmark size={18} color={colors.textMuted} style={styles.emptyBoxIcon} />
+                <Text style={[styles.emptyTitle, { color: colors.text, fontFamily: scriptFontFamily(language, '600') }]}>
                   {t.profile.savedEmpty}
+                </Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
+                  {t.profile.savedEmptySubtitle}
                 </Text>
               </View>
             ) : (
@@ -234,7 +275,8 @@ export default function ProfileScreen() {
           })}
         </View>
 
-        {/* — Notifications — TODO: wire up expo-notifications before shipping — */}
+        {/* — Notifications — real, on-device local scheduling via
+             expo-notifications (see useReminderStore). — */}
         <Text style={[styles.sectionHeader, { color: colors.accent, fontFamily: scriptFontFamily(language, '700') }]}>
           {t.settings.notifications}
         </Text>
@@ -242,18 +284,59 @@ export default function ProfileScreen() {
           label={t.settings.dailyReminder}
           subtitle={t.settings.dailyReminderSubtitle}
           language={language}
-          icon={<Bell size={18} color={colors.textMuted} />}
-          colors={{ ...colors, accent: colors.textMuted, accentMuted: colors.surface, accentBorder: colors.border }}
+          icon={<Bell size={18} color={reminderEnabled ? colors.accent : colors.textMuted} />}
+          colors={reminderEnabled ? colors : { ...colors, accent: colors.textMuted, accentMuted: colors.surface, accentBorder: colors.border }}
           right={
             <Switch
-              value={false}
-              disabled={true}
+              value={reminderEnabled}
+              onValueChange={(v) => setReminderEnabled(v)}
               trackColor={{ false: colors.border, true: colors.accent }}
-              thumbColor="#FFFFFF"
-              accessibilityLabel="Daily reminder (coming soon)"
+              thumbColor={reminderEnabled ? (theme === 'dark' ? '#0A0A0F' : '#FFFFFF') : '#FFFFFF'}
+              accessibilityLabel={t.settings.dailyReminder}
+              accessibilityRole="switch"
             />
           }
         />
+        {reminderPermissionDenied && (
+          <Text style={[styles.reminderDeniedText, { color: colors.error }]}>
+            {t.settings.dailyReminderPermissionDenied}
+          </Text>
+        )}
+        {reminderEnabled && (
+          <>
+            <Pressable
+              onPress={() => setShowTimePicker((v) => !v)}
+              style={({ pressed }) => [
+                styles.reminderTimeRow,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                pressed && { opacity: 0.75 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`${t.settings.dailyReminderTimeLabel}: ${formatTime(reminderHour, reminderMinute)}`}
+            >
+              <Text style={[styles.reminderTimeLabel, { color: colors.textSecondary }]}>
+                {t.settings.dailyReminderTimeLabel}
+              </Text>
+              <Text style={[styles.reminderTimeValue, { color: colors.accent }]}>
+                {formatTime(reminderHour, reminderMinute)}
+              </Text>
+            </Pressable>
+            {showTimePicker && (
+              <DateTimePicker
+                value={reminderTimeAsDate}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event, selected) => {
+                  if (Platform.OS === 'android') setShowTimePicker(false);
+                  if (event.type === 'set' && selected) {
+                    setReminderTime(selected.getHours(), selected.getMinutes());
+                  }
+                }}
+                accessibilityLabel={t.settings.dailyReminderTimeLabel}
+              />
+            )}
+          </>
+        )}
 
         {/* — Share & Feedback — */}
         <Pressable onPress={handleShare}>
@@ -294,6 +377,10 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scrollContent: { paddingHorizontal: SCREEN_PADDING },
+  reminderDeniedText: { fontSize: 12, lineHeight: 17, marginTop: -4, marginBottom: 10 },
+  reminderTimeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 10 },
+  reminderTimeLabel: { fontSize: 13.5 },
+  reminderTimeValue: { fontSize: 14, fontWeight: '700' },
   title: { ...TYPE.screenTitle, marginBottom: 20 },
   sectionHeader: { ...TYPE.sectionLabel, marginBottom: SPACING.md, marginTop: 4 },
   subLabel: { fontSize: 12.5, marginBottom: 10, marginTop: -4 },
@@ -303,8 +390,10 @@ const styles = StyleSheet.create({
   loginPrompt: { fontSize: 13, lineHeight: 18 },
   loginButtonText: { fontSize: 13, fontWeight: '700' },
   savedLoading: { marginBottom: 10 },
-  emptyBox: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 10 },
-  emptyText: { fontSize: 13 },
+  emptyBox: { borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 10, alignItems: 'flex-start' },
+  emptyBoxIcon: { marginBottom: 8 },
+  emptyTitle: { fontSize: 14, marginBottom: 4 },
+  emptyText: { fontSize: 13, lineHeight: 18 },
   savedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8 },
   savedRowText: { fontSize: 14, flex: 1 },
   langGroup: { borderRadius: 16, borderWidth: 1, overflow: 'hidden', marginBottom: 10 },

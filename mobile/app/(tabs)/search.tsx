@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Search as SearchIcon } from 'lucide-react-native';
+import { Search as SearchIcon, SearchX } from 'lucide-react-native';
 
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
@@ -86,7 +86,7 @@ export default function SearchScreen() {
             {t.search.placeholder}
           </Text>
           <Text style={[styles.initialSubtitle, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
-            Search across all texts, topics, and teachings
+            {t.search.initialSubtitle}
           </Text>
         </View>
       )}
@@ -101,9 +101,15 @@ export default function SearchScreen() {
       )}
 
       {showEmptyState && (
-        <View style={styles.centerBlock}>
-          <Text style={[styles.statusText, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
+        <View style={styles.initialState}>
+          <View style={[styles.initialIcon, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <SearchX size={28} color={colors.textMuted} />
+          </View>
+          <Text style={[styles.initialTitle, { color: colors.text, fontFamily: scriptFontFamily(language, '700') }]}>
             {t.search.noResults}
+          </Text>
+          <Text style={[styles.initialSubtitle, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
+            {t.search.noResultsSubtitle}
           </Text>
         </View>
       )}

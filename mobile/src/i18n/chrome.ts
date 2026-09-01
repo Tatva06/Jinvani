@@ -11,6 +11,8 @@ export interface ChromeStrings {
     notifications: string;
     dailyReminder: string;
     dailyReminderSubtitle: string;
+    dailyReminderPermissionDenied: string;
+    dailyReminderTimeLabel: string;
     about: string;
     appTagline: string;
   };
@@ -35,6 +37,13 @@ export interface ChromeStrings {
     startReading: string;
     storiesTitle: string;
     storiesEmpty: string;
+    minRead: string;
+    timeFilterUnder5: string;
+    timeFilter5to15: string;
+    timeFilterOver15: string;
+    timeFilterAll: string;
+    emptyFilteredTitle: string;
+    emptyFilteredSubtitle: string;
   };
   story: {
     startReading: string;
@@ -44,16 +53,26 @@ export interface ChromeStrings {
     keyTakeaway: string;
     originalSource: string;
     todaysSpecial: string;
+    attributionBy: string;
+    publicDomain: string;
+    readCompleteOriginal: string;
+    loadErrorTitle: string;
+    retry: string;
   };
   search: {
     placeholder: string;
+    initialSubtitle: string;
     noResults: string;
+    noResultsSubtitle: string;
     searching: string;
   };
   profile: {
     title: string;
     saved: string;
     savedEmpty: string;
+    savedEmptySubtitle: string;
+    savedLoggedOutTitle: string;
+    savedLoggedOutSubtitle: string;
     personalizeFeed: string;
     defaultTopicLabel: string;
     shareApp: string;
@@ -92,6 +111,8 @@ export const CHROME: Record<Language, ChromeStrings> = {
       notifications: 'Notifications',
       dailyReminder: 'Daily Reminder',
       dailyReminderSubtitle: 'Get a card every morning',
+      dailyReminderPermissionDenied: 'Notifications are blocked — enable them in system settings to use this.',
+      dailyReminderTimeLabel: 'Reminder time',
       about: 'About',
       appTagline: 'Jain scripture in your pocket',
     },
@@ -111,6 +132,13 @@ export const CHROME: Record<Language, ChromeStrings> = {
       startReading: 'Start Reading',
       storiesTitle: 'Stories',
       storiesEmpty: 'No stories yet.',
+      minRead: 'min read',
+      timeFilterUnder5: 'Under 5 min',
+      timeFilter5to15: '5–15 min',
+      timeFilterOver15: '15+ min',
+      timeFilterAll: 'All lengths',
+      emptyFilteredTitle: 'Nothing this length yet',
+      emptyFilteredSubtitle: 'Try a different reading-time filter.',
     },
     story: {
       startReading: 'Start Reading',
@@ -120,16 +148,26 @@ export const CHROME: Record<Language, ChromeStrings> = {
       keyTakeaway: 'Key Takeaway',
       originalSource: 'Original Source',
       todaysSpecial: "Today's Special",
+      attributionBy: 'by',
+      publicDomain: 'Public domain',
+      readCompleteOriginal: 'Read Complete Original',
+      loadErrorTitle: "Couldn't load the feed.",
+      retry: 'Retry',
     },
     search: {
       placeholder: 'Search scripture cards...',
+      initialSubtitle: 'Search across all texts, topics, and teachings',
       noResults: 'No cards found.',
+      noResultsSubtitle: 'Try a different word or topic.',
       searching: 'Searching...',
     },
     profile: {
       title: 'Profile',
       saved: 'Saved',
       savedEmpty: 'No saved cards yet.',
+      savedEmptySubtitle: 'Tap the bookmark icon on any card to save it here.',
+      savedLoggedOutTitle: 'Log in to see your saved cards',
+      savedLoggedOutSubtitle: 'Saved cards sync across every device you log into.',
       personalizeFeed: 'Personalize Feed',
       defaultTopicLabel: 'Default topic on open',
       shareApp: 'Share App',
@@ -166,6 +204,8 @@ export const CHROME: Record<Language, ChromeStrings> = {
       notifications: 'सूचनाएं',
       dailyReminder: 'दैनिक अनुस्मारक',
       dailyReminderSubtitle: 'हर सुबह एक कार्ड पाएं',
+      dailyReminderPermissionDenied: 'सूचनाएं अवरुद्ध हैं — इसका उपयोग करने के लिए सिस्टम सेटिंग्स में इन्हें सक्षम करें।',
+      dailyReminderTimeLabel: 'अनुस्मारक का समय',
       about: 'परिचय',
       appTagline: 'आपकी जेब में जैन शास्त्र',
     },
@@ -185,6 +225,13 @@ export const CHROME: Record<Language, ChromeStrings> = {
       startReading: 'पढ़ना शुरू करें',
       storiesTitle: 'कहानियाँ',
       storiesEmpty: 'अभी कोई कहानी नहीं है।',
+      minRead: 'मिनट का पठन',
+      timeFilterUnder5: '5 मिनट से कम',
+      timeFilter5to15: '5–15 मिनट',
+      timeFilterOver15: '15+ मिनट',
+      timeFilterAll: 'सभी लंबाई',
+      emptyFilteredTitle: 'इस लंबाई का अभी कुछ नहीं',
+      emptyFilteredSubtitle: 'कोई अन्य पठन-समय फ़िल्टर आज़माएं।',
     },
     story: {
       startReading: 'पढ़ना शुरू करें',
@@ -194,16 +241,26 @@ export const CHROME: Record<Language, ChromeStrings> = {
       keyTakeaway: 'मुख्य सीख',
       originalSource: 'मूल स्रोत',
       todaysSpecial: 'आज का विशेष',
+      attributionBy: 'द्वारा',
+      publicDomain: 'सार्वजनिक डोमेन',
+      readCompleteOriginal: 'पूर्ण मूल पाठ पढ़ें',
+      loadErrorTitle: 'फ़ीड लोड नहीं हो सका।',
+      retry: 'पुनः प्रयास करें',
     },
     search: {
       placeholder: 'शास्त्र कार्ड खोजें...',
+      initialSubtitle: 'सभी ग्रंथों, विषयों और शिक्षाओं में खोजें',
       noResults: 'कोई कार्ड नहीं मिला।',
+      noResultsSubtitle: 'कोई अन्य शब्द या विषय आज़माएं।',
       searching: 'खोजा जा रहा है...',
     },
     profile: {
       title: 'प्रोफ़ाइल',
       saved: 'सहेजे गए',
       savedEmpty: 'अभी तक कोई कार्ड सहेजा नहीं गया।',
+      savedEmptySubtitle: 'किसी भी कार्ड को यहां सहेजने के लिए बुकमार्क आइकन पर टैप करें।',
+      savedLoggedOutTitle: 'अपने सहेजे गए कार्ड देखने के लिए लॉग इन करें',
+      savedLoggedOutSubtitle: 'सहेजे गए कार्ड आपके हर डिवाइस पर समन्वयित होते हैं।',
       personalizeFeed: 'फ़ीड को अनुकूलित करें',
       defaultTopicLabel: 'खोलने पर डिफ़ॉल्ट विषय',
       shareApp: 'ऐप साझा करें',
@@ -240,6 +297,8 @@ export const CHROME: Record<Language, ChromeStrings> = {
       notifications: 'સૂચનાઓ',
       dailyReminder: 'દૈનિક રિમાઇન્ડર',
       dailyReminderSubtitle: 'દરરોજ સવારે એક કાર્ડ મેળવો',
+      dailyReminderPermissionDenied: 'સૂચનાઓ અવરોધિત છે — તેનો ઉપયોગ કરવા માટે સિસ્ટમ સેટિંગ્સમાં તેને સક્ષમ કરો.',
+      dailyReminderTimeLabel: 'રિમાઇન્ડરનો સમય',
       about: 'વિશે',
       appTagline: 'તમારા ખિસ્સામાં જૈન શાસ્ત્ર',
     },
@@ -259,6 +318,13 @@ export const CHROME: Record<Language, ChromeStrings> = {
       startReading: 'વાંચન શરૂ કરો',
       storiesTitle: 'વાર્તાઓ',
       storiesEmpty: 'હજુ કોઈ વાર્તા નથી.',
+      minRead: 'મિનિટનું વાંચન',
+      timeFilterUnder5: '5 મિનિટથી ઓછું',
+      timeFilter5to15: '5–15 મિનિટ',
+      timeFilterOver15: '15+ મિનિટ',
+      timeFilterAll: 'બધી લંબાઈ',
+      emptyFilteredTitle: 'આ લંબાઈનું હજુ કંઈ નથી',
+      emptyFilteredSubtitle: 'બીજું વાંચન-સમય ફિલ્ટર અજમાવો.',
     },
     story: {
       startReading: 'વાંચન શરૂ કરો',
@@ -268,16 +334,26 @@ export const CHROME: Record<Language, ChromeStrings> = {
       keyTakeaway: 'મુખ્ય શીખ',
       originalSource: 'મૂળ સ્ત્રોત',
       todaysSpecial: 'આજની ખાસ',
+      attributionBy: 'દ્વારા',
+      publicDomain: 'સાર્વજનિક ડોમેન',
+      readCompleteOriginal: 'સંપૂર્ણ મૂળ લખાણ વાંચો',
+      loadErrorTitle: 'ફીડ લોડ થઈ શક્યું નથી.',
+      retry: 'ફરી પ્રયાસ કરો',
     },
     search: {
       placeholder: 'શાસ્ત્ર કાર્ડ શોધો...',
+      initialSubtitle: 'બધા ગ્રંથો, વિષયો અને ઉપદેશોમાં શોધો',
       noResults: 'કોઈ કાર્ડ મળ્યું નથી.',
+      noResultsSubtitle: 'બીજો શબ્દ અથવા વિષય અજમાવો.',
       searching: 'શોધાઈ રહ્યું છે...',
     },
     profile: {
       title: 'પ્રોફાઇલ',
       saved: 'સાચવેલા',
       savedEmpty: 'હજુ સુધી કોઈ કાર્ડ સાચવ્યું નથી.',
+      savedEmptySubtitle: 'કોઈપણ કાર્ડને અહીં સાચવવા માટે બુકમાર્ક આઇકન પર ટેપ કરો.',
+      savedLoggedOutTitle: 'તમારા સાચવેલા કાર્ડ જોવા માટે લૉગ ઇન કરો',
+      savedLoggedOutSubtitle: 'સાચવેલા કાર્ડ તમારા દરેક ડિવાઇસ પર સિંક થાય છે.',
       personalizeFeed: 'ફીડને વ્યક્તિગત બનાવો',
       defaultTopicLabel: 'ખોલવા પર મૂળભૂત વિષય',
       shareApp: 'એપ શેર કરો',

@@ -7,6 +7,7 @@ import { StyleSheet, View } from 'react-native';
 import { useThemeStore } from '../src/store/useThemeStore';
 import { useFeedStore } from '../src/store/useFeedStore';
 import { useAuthStore } from '../src/store/useAuthStore';
+import { useReminderStore } from '../src/store/useReminderStore';
 import { Colors } from '../src/theme';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { useScriptFonts } from '../src/utils/fonts';
@@ -16,6 +17,7 @@ export default function RootLayout() {
   const loadTheme = useThemeStore((state) => state.loadTheme);
   const loadLanguage = useFeedStore((state) => state.loadLanguage);
   const initAuth = useAuthStore((state) => state.init);
+  const loadReminder = useReminderStore((state) => state.loadReminder);
   const colors = Colors[theme];
   const scriptFontsLoaded = useScriptFonts();
 
@@ -23,7 +25,8 @@ export default function RootLayout() {
     loadTheme();
     loadLanguage();
     initAuth();
-  }, [loadTheme, loadLanguage, initAuth]);
+    loadReminder();
+  }, [loadTheme, loadLanguage, initAuth, loadReminder]);
 
   // Hold a blank frame (in the current theme's background) rather than
   // flashing Devanagari/Gujarati text in the system font before the

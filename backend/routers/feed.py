@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import logging
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from attribution import (
+    CARDS_WITH_BOOK_SELECT,
+    CARDS_BASE_SELECT,
+    attach_book_fields,
+    select_with_book_fallback,
+)
 from models import CardOut, FeedResponse
 
 logger = logging.getLogger("jinvani.feed")
@@ -25,19 +31,24 @@ async def _get_featured_card(supabase) -> CardOut | None:
     useFeedStore) rather than server-side per-user state, since /feed has
     no auth requirement to hang that on.
     """
-    result = (
-        await supabase.table("cards")
-        .select("*, decks(title, topic_tag, book_id, sequence_order)")
-        .eq("status", "approved")
-        .in_("card_type", FEATURED_CARD_TYPES)
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
+    def build(select: str):
+        return (
+            supabase.table("cards")
+            .select(select)
+            .eq("status", "approved")
+            .in_("card_type", FEATURED_CARD_TYPES)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+    rows = await select_with_book_fallback(
+        lambda: build(CARDS_WITH_BOOK_SELECT),
+        lambda: build(CARDS_BASE_SELECT),
     )
-    rows = result.data or []
     if not rows:
         return None
-    row = rows[0]
+    row = attach_book_fields(rows[0])
     deck_info = row.get("decks")
     if deck_info and isinstance(deck_info, dict):
         row["deck_title"] = deck_info.get("title")
@@ -66,40 +77,42 @@ async def get_feed(
             logger.exception("Featured-card lookup failed for /feed — continuing without one")
             featured = None
 
-    try:
+    def build(select_decks: str):
+        q = (
+            state.supabase
+            .table("cards")
+            .select(f"*, {select_decks}")
+            .eq("status", "approved")
+        )
         if topic:
-            query = (
-                state.supabase
-                .table("cards")
-                .select("*, decks!inner(title, topic_tag, book_id, sequence_order)")
-                .eq("status", "approved")
-                .eq("decks.topic_tag", topic)
-                .order("deck_id", desc=False)
-                .order("sequence_order", desc=False)
-                .limit(limit)
-                .offset(offset)
-            )
-        else:
-            query = (
-                state.supabase
-                .table("cards")
-                .select("*, decks(title, topic_tag, book_id, sequence_order)")
-                .eq("status", "approved")
-                .order("deck_id", desc=False)
-                .order("sequence_order", desc=False)
-                .limit(limit)
-                .offset(offset)
-            )
-        response = await query.execute()
+            q = q.eq("decks.topic_tag", topic)
+        return (
+            q.order("deck_id", desc=False)
+            .order("sequence_order", desc=False)
+            .limit(limit)
+            .offset(offset)
+            .execute()
+        )
+
+    # `!inner` is required only for the topic-filtered case (it turns the
+    # embed into an inner join so `.eq("decks.topic_tag", ...)` actually
+    # filters rows instead of being ignored on a left join).
+    inner = "!inner" if topic else ""
+    try:
+        rows = await select_with_book_fallback(
+            lambda: build(f"decks{inner}(title, topic_tag, book_id, sequence_order, books(title, author, pdf_url, is_public_domain, rights_note))"),
+            lambda: build(f"decks{inner}(title, topic_tag, book_id, sequence_order)"),
+        )
     except Exception as exc:
         logger.exception("Supabase query failed for /feed")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Feed fetch failed.") from exc
 
     featured_id = str(featured.id) if featured else None
     cards = []
-    for row in (response.data or []):
+    for row in rows:
         if featured_id and row["id"] == featured_id:
             continue  # already returned via `featured` — don't show it twice
+        attach_book_fields(row)
         deck_info = row.get("decks")
         if deck_info and isinstance(deck_info, dict):
             row["deck_title"] = deck_info.get("title")

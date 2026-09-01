@@ -46,6 +46,16 @@ export interface SeedCard {
    * useFeedStore when it prepends the API's `featured` card; never comes
    * from the API response itself. Drives JinvaniCard's badge. */
   isFeatured?: boolean;
+  // ─── Book attribution (migration 004_book_attribution.sql) — all
+  // undefined/null until that migration is applied AND the card's deck
+  // has a matching books row. JinvaniCard's attribution footer and
+  // "Read Complete Original" action must render sensibly with any/all
+  // of these absent. ───
+  bookTitle?: string | null;
+  authorName?: string | null;
+  sourceUrl?: string | null;
+  isPublicDomain?: boolean | null;
+  rightsNote?: string | null;
 }
 
 // ─── Book / Library ─────────────────────────────────────────────────────────────
@@ -57,6 +67,8 @@ export interface DeckSummary {
   approvedCardCount: number;
   /** Distinct card_type values among this deck's approved cards. */
   cardTypes: CardType[];
+  /** Word-count-derived, computed server-side per request. */
+  estimatedReadMinutes: number;
 }
 
 export interface Book {
@@ -68,6 +80,13 @@ export interface Book {
   approvedCardCount: number;
   /** Union of every deck's cardTypes. */
   cardTypes: CardType[];
+  estimatedReadMinutes: number;
+  // ─── Book attribution — see SeedCard's identical fields for the
+  // null-until-migration-004-applied contract. ───
+  authorName?: string | null;
+  sourceUrl?: string | null;
+  isPublicDomain?: boolean | null;
+  rightsNote?: string | null;
 }
 
 // ─── Stories (Type 5 / narrative) ────────────────────────────────────────────
@@ -76,6 +95,7 @@ export interface Story {
   bookId: string;
   title: string;
   cardCount: number;
+  estimatedReadMinutes: number;
 }
 
 export interface StoryDetail extends Story {

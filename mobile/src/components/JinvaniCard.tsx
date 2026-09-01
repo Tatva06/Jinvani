@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -30,7 +30,7 @@ function SourceLabel({
   if (!card.bookId) {
     // No book_id (e.g. an offline seed-data fallback card) — nothing to
     // navigate to, so render as plain text rather than a dead tap target.
-    return <Text style={[styles.citationText, { color: colors.textMuted }]}>{label}</Text>;
+    return <Text maxFontSizeMultiplier={1.3} style={[styles.citationText, { color: colors.textMuted }]}>{label}</Text>;
   }
 
   return (
@@ -38,12 +38,79 @@ function SourceLabel({
       onPress={() => router.push({ pathname: '/book/[bookId]', params: { bookId: card.bookId! } })}
       hitSlop={6}
     >
-      <Text style={[styles.citationText, styles.citationTextTappable, { color: colors.textMuted }]}>{label}</Text>
+      <Text maxFontSizeMultiplier={1.3} style={[styles.citationText, styles.citationTextTappable, { color: colors.textMuted }]}>{label}</Text>
     </Pressable>
   );
 }
 
+// Book attribution (migration 004_book_attribution.sql) — every field is
+// None until that's applied AND the card's deck has a matching books
+// row, so this renders nothing at all (not an empty row/stray "by ")
+// when there's nothing to show. "Read Complete Original" is scoped to
+// digest cards specifically (per the original ask) — a digest is a
+// compressed stand-in for a full source text, so linking out to the
+// complete original is exactly what that card type wants; other card
+// types either already ARE the full text (verbatim) or aren't tied to
+// one linear source (summary/chunked_verse/narrative).
+function AttributionFooter({
+  card,
+  colors,
+  language,
+}: {
+  card: SeedCard;
+  colors: (typeof Colors)['dark'];
+  language: Language;
+}) {
+  const t = CHROME[language].feed;
+
+  const parts: string[] = [];
+  if (card.bookTitle) parts.push(card.bookTitle);
+  if (card.authorName) parts.push(`${t.attributionBy} ${card.authorName}`);
+  if (card.rightsNote) parts.push(card.rightsNote);
+  else if (card.isPublicDomain) parts.push(t.publicDomain);
+  const attributionText = parts.join(' · ');
+
+  const showReadOriginal = card.cardType === 'digest' && Boolean(card.sourceUrl);
+
+  if (!attributionText && !showReadOriginal) return null;
+
+  return (
+    <View style={styles.attributionFooter}>
+      {attributionText.length > 0 && (
+        <Text maxFontSizeMultiplier={1.3} style={[styles.attributionText, { color: colors.textMuted }]} numberOfLines={2}>
+          {attributionText}
+        </Text>
+      )}
+      {showReadOriginal && (
+        <Pressable
+          onPress={() => Linking.openURL(card.sourceUrl!).catch(() => {})}
+          hitSlop={8}
+          accessibilityRole="link"
+          accessibilityLabel={t.readCompleteOriginal}
+        >
+          <Text maxFontSizeMultiplier={1.3} style={[styles.readOriginalText, { color: colors.accent }]}>
+            {t.readCompleteOriginal}
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 const FLIP_DURATION_MS = 420;
+
+// cardInner's bottom padding, on top of insets.bottom. This card is given
+// `screenHeight` (the full window height) even though the feed screen's
+// visible viewport is shorter than that by (sticky header height + tab
+// bar height) — both sit outside the paging FlashList, so every card's
+// bottom edge extends that far below what's actually visible. This
+// constant is what pulls the Key Takeaway box + citation back up into
+// the visible area. Was 80 (just clearing the tab bar); confirmed via
+// screenshot that this under-counted the sticky header's own height too,
+// clipping the takeaway box's bottom border and citation. 180 clears
+// both with comfortable margin on a real device — re-check visually if
+// the feed header's height or the tab bar's height/style ever changes.
+const CARD_BOTTOM_PADDING = 180;
 
 export const JinvaniCard = React.memo(function JinvaniCard({
   card,
@@ -59,6 +126,17 @@ export const JinvaniCard = React.memo(function JinvaniCard({
   const insets = useSafeAreaInsets();
   const c = Colors[themeMode];
   const content = resolveCardContent(card.content, language);
+
+  // flex-start reads well once there's enough body text to make top
+  // alignment look intentional (confirmed against a real medium card:
+  // Ācārāṅga Sūtra / "All Living Beings Desire to Live", ~425 chars). But
+  // the one genuinely short card in the real dataset (~123 chars, 17
+  // words) looked broken with flex-start — all its leftover space
+  // dumped below the text as one large dead gap. 200 chars sits safely
+  // between that outlier and every other card actually seen (next
+  // shortest is ~389 chars), so centering is kept only for content this
+  // sparse; everything else uses flex-start.
+  const isVerySparseBody = content.body.length < 200;
 
   // A card is flippable purely based on whether there's an original verse to
   // show on the back — this is the real condition that matters (and covers
@@ -87,10 +165,21 @@ export const JinvaniCard = React.memo(function JinvaniCard({
   const rotation = useSharedValue(0);
   const [isBack, setIsBack] = React.useState(false);
 
+  // Reduce Motion — checked once on mount and kept live via the OS
+  // change event, same as any other system-settings-driven UI toggle.
+  // When on, the flip snaps instantly instead of forcing the rotation
+  // transition regardless of the user's accessibility setting.
+  const [reduceMotionEnabled, setReduceMotionEnabled] = React.useState(false);
+  React.useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotionEnabled);
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotionEnabled);
+    return () => sub.remove();
+  }, []);
+
   const flip = () => {
     if (!canFlip) return;
     const next = rotation.value === 0 ? 180 : 0;
-    rotation.value = withTiming(next, { duration: FLIP_DURATION_MS });
+    rotation.value = reduceMotionEnabled ? next : withTiming(next, { duration: FLIP_DURATION_MS });
     setIsBack(next === 180);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
@@ -152,7 +241,7 @@ export const JinvaniCard = React.memo(function JinvaniCard({
         style={[styles.face, frontAnimatedStyle]}
         pointerEvents={isBack ? 'none' : 'auto'}
       >
-        <View style={[styles.cardInner, { paddingTop: 20, paddingBottom: insets.bottom + 80 }]}>
+        <View style={[styles.cardInner, { paddingTop: 20, paddingBottom: insets.bottom + CARD_BOTTOM_PADDING }]}>
           {/* Top */}
           <View style={styles.topSection}>
             {card.isFeatured ? (
@@ -161,20 +250,20 @@ export const JinvaniCard = React.memo(function JinvaniCard({
               // ever true for the one pinned card useFeedStore prepends).
               <View style={[styles.featuredBadge, { backgroundColor: c.accent }]}>
                 <Sparkles size={11} color={themeMode === 'dark' ? '#0A0A0F' : '#FFFFFF'} />
-                <Text style={[styles.featuredBadgeText, { color: themeMode === 'dark' ? '#0A0A0F' : '#FFFFFF' }]} numberOfLines={1}>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.featuredBadgeText, { color: themeMode === 'dark' ? '#0A0A0F' : '#FFFFFF' }]} numberOfLines={1}>
                   {CHROME[language].feed.todaysSpecial}
                 </Text>
               </View>
             ) : (
               <View style={[styles.deckBadge, { backgroundColor: c.accentMuted, borderColor: c.accentBorder }]}>
-                <Text style={[styles.deckBadgeText, { color: c.accent }]} numberOfLines={1}>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.deckBadgeText, { color: c.accent }]} numberOfLines={1}>
                   {card.deckTitle}
                 </Text>
               </View>
             )}
             <View style={styles.indexRow}>
               {isBookMode && <BookOpen size={12} color={c.accent} />}
-              <Text style={[styles.cardIndexText, { color: c.textMuted }]}>{card.cardIndex}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.cardIndexText, { color: c.textMuted }]}>{card.cardIndex}</Text>
             </View>
           </View>
 
@@ -190,7 +279,7 @@ export const JinvaniCard = React.memo(function JinvaniCard({
               into siblings above/below, since RN doesn't clip overflowing
               children by default). */}
           <View>
-            <Text style={[styles.cardTitle, { color: c.text, fontFamily: scriptFontFamily(language, '700') }]}>{content.title}</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.cardTitle, { color: c.text, fontFamily: scriptFontFamily(language, '700') }]}>{content.title}</Text>
             <View style={[styles.titleDivider, { backgroundColor: c.accent }]} />
           </View>
 
@@ -207,17 +296,20 @@ export const JinvaniCard = React.memo(function JinvaniCard({
           <View style={styles.bodyRegion}>
             <ScrollView
               style={styles.bodyScroll}
-              contentContainerStyle={styles.bodyScrollContent}
+              contentContainerStyle={[
+                styles.bodyScrollContent,
+                isVerySparseBody && styles.bodyScrollContentCentered,
+              ]}
               showsVerticalScrollIndicator={false}
               nestedScrollEnabled
             >
-              <Text style={[styles.bodyText, { color: c.textSecondary, fontFamily: scriptFontFamily(language, '400') }]}>{content.body}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.bodyText, { color: c.textSecondary, fontFamily: scriptFontFamily(language, '400') }]}>{content.body}</Text>
               {card.originalVerse && (
                 <View style={[styles.verseContainer, { backgroundColor: c.verseBg, borderColor: c.verseBorder }]}>
-                  <Text style={[styles.verseScriptLabel, { color: c.textMuted }]}>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.verseScriptLabel, { color: c.textMuted }]}>
                     {card.originalVerse.script}
                   </Text>
-                  <Text style={[styles.verseText, { color: c.accent, fontFamily: verseScriptFontFamily('400') }]}>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.verseText, { color: c.accent, fontFamily: verseScriptFontFamily('400') }]}>
                     {card.originalVerse.text}
                   </Text>
                 </View>
@@ -230,11 +322,12 @@ export const JinvaniCard = React.memo(function JinvaniCard({
             <View style={[styles.takeawayBox, { backgroundColor: c.takeawayBg, borderColor: c.accentBorder }]}>
               <View style={styles.takeawayHeader}>
                 <View style={[styles.takeawayDot, { backgroundColor: c.accent }]} />
-                <Text style={[styles.takeawayLabel, { color: c.accent, fontFamily: scriptFontFamily(language, '700') }]}>{CHROME[language].feed.keyTakeaway}</Text>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.takeawayLabel, { color: c.accent, fontFamily: scriptFontFamily(language, '700') }]}>{CHROME[language].feed.keyTakeaway}</Text>
               </View>
-              <Text style={[styles.takeawayText, { color: c.text, fontFamily: scriptFontFamily(language, '400') }]}>{content.takeaway}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.takeawayText, { color: c.text, fontFamily: scriptFontFamily(language, '400') }]}>{content.takeaway}</Text>
             </View>
             <SourceLabel card={card} colors={c} />
+            <AttributionFooter card={card} colors={c} language={language} />
           </View>
         </View>
       </Animated.View>
@@ -245,16 +338,16 @@ export const JinvaniCard = React.memo(function JinvaniCard({
           style={[styles.face, backAnimatedStyle]}
           pointerEvents={isBack ? 'auto' : 'none'}
         >
-          <View style={[styles.cardInner, styles.backInner, { paddingTop: 20, paddingBottom: insets.bottom + 80 }]}>
-            <Text style={[styles.backLabel, { color: c.accent }]}>{CHROME[language].feed.originalSource}</Text>
+          <View style={[styles.cardInner, styles.backInner, { paddingTop: 20, paddingBottom: insets.bottom + CARD_BOTTOM_PADDING }]}>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.backLabel, { color: c.accent }]}>{CHROME[language].feed.originalSource}</Text>
             <View style={[styles.titleDivider, { backgroundColor: c.accent }]} />
-            <Text style={[styles.backScriptLabel, { color: c.textMuted }]}>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.backScriptLabel, { color: c.textMuted }]}>
               {card.originalVerse.script}
             </Text>
-            <Text style={[styles.backVerseText, { color: c.text, fontFamily: verseScriptFontFamily('400') }]}>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.backVerseText, { color: c.text, fontFamily: verseScriptFontFamily('400') }]}>
               {card.originalVerse.text}
             </Text>
-            <Text style={[styles.citationText, styles.backCitation, { color: c.textMuted }]}>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.citationText, styles.backCitation, { color: c.textMuted }]}>
               {card.citation}
             </Text>
           </View>
@@ -339,11 +432,25 @@ const styles = StyleSheet.create({
   // content box can't also be a bounded scroll container).
   bodyRegion: { flex: 1 },
   bodyScroll: { flex: 1 },
-  // flexGrow (not flex) + justifyContent:'center' on the CONTENT container
-  // — the standard RN pattern for "centered when content fits, scrolls
-  // normally (content pinned to top, no forced centering) once it
-  // doesn't." Matches middleSection's old paddingVertical for short cards.
-  bodyScrollContent: { flexGrow: 1, justifyContent: 'center', paddingVertical: 12 },
+  // flexGrow (not flex) + justifyContent:'flex-start' — text starts right
+  // after the divider (paddingVertical gives the breathing room) instead
+  // of being vertically centered. Centering left a large, visually
+  // awkward gap after the divider on medium-length cards (confirmed
+  // against a real card: Ācārāṅga Sūtra / "All Living Beings Desire to
+  // Live"). Doesn't affect overflow behavior — that's the bounded height
+  // + ScrollView, not this axis — and has zero effect on long/stress
+  // cards, where content already fills or exceeds the box (no leftover
+  // space for either value to distribute differently). Only genuinely
+  // sparse cards (isVerySparseBody) opt back into centering below, via
+  // bodyScrollContentCentered — see that comment for why.
+  bodyScrollContent: { flexGrow: 1, justifyContent: 'flex-start', paddingVertical: 12 },
+  // Override for the isVerySparseBody case — flex-start on ~17-word
+  // content dumps 100% of the leftover space below the text as one
+  // large dead gap before the takeaway box (confirmed against the real
+  // shortest card in the dataset, "The Path to Liberation"); centering
+  // splits that same leftover space top/bottom, which reads as
+  // intentional breathing room instead of a broken layout.
+  bodyScrollContentCentered: { justifyContent: 'center' },
   bodyText: { fontSize: 16, lineHeight: 26, fontWeight: '400', letterSpacing: 0.1 },
   verseContainer: { marginTop: 20, padding: 14, borderWidth: 1, borderRadius: 12 },
   verseScriptLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 6 },
@@ -356,6 +463,13 @@ const styles = StyleSheet.create({
   // bumped from 14 → 15.5 since takeaway is the most important text on the card
   takeawayText: { fontSize: 15.5, lineHeight: 23 },
   citationText: { fontSize: 11.5, fontStyle: 'italic', textAlign: 'right', letterSpacing: 0.2, paddingRight: 4, marginBottom: 2 },
+  // Sits directly below SourceLabel's citation, right-aligned to match it —
+  // reads as one continuous "source info" block rather than two unrelated
+  // rows. -6 pulls it closer to the citation than bottomSection's gap:12
+  // default, since these two rows are conceptually one unit.
+  attributionFooter: { alignItems: 'flex-end', gap: 4, marginTop: -6 },
+  attributionText: { fontSize: 11, textAlign: 'right', paddingRight: 4 },
+  readOriginalText: { fontSize: 12, fontWeight: '700', textAlign: 'right', paddingRight: 4, textDecorationLine: 'underline' },
   citationTextTappable: { textDecorationLine: 'underline' },
   backInner: { justifyContent: 'center', alignItems: 'center' },
   backLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 14, textAlign: 'center' },

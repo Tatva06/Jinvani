@@ -6,26 +6,47 @@ import { storage } from './mmkvStorage';
 
 const LANGUAGE_KEY = 'app-language';
 const DEFAULT_TOPIC_KEY = 'pref-default-topic';
-// Type 4 — "Today's Special": the date (YYYY-MM-DD) it was last shown.
-// Client-side "seen today" tracking — the backend has no per-user state
-// to hang this on (feed is unauthenticated), so this is the simplest
-// correct place for it, same MMKV convention as language/theme.
+// Type 4 — "Today's Special": which calendar day the cached pick below is
+// for, plus the pick itself. Client-side tracking — the backend has no
+// per-user state to hang this on (feed is unauthenticated), so this is
+// the simplest correct place for it, same MMKV convention as language/theme.
 const FEATURED_LAST_SHOWN_KEY = 'featured-last-shown-date';
+const FEATURED_CARD_KEY = 'featured-card-of-the-day';
 const PAGE_SIZE = 20;
 
 function todayStamp(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD, device-local-enough for "once a day"
 }
 
-/** True the first time this is called on a given calendar day; marks the
- * day as shown as a side effect. Deliberately impure (check-and-set) —
- * every caller wants exactly that: "may I show it, and if so, consider it
- * shown now." */
-function claimFeaturedSlotForToday(): boolean {
+/** Locks in one featured card per calendar day, deterministic and stable
+ * across both app restarts and pull-to-refresh within the same day —
+ * deliberately NOT re-derived from `freshFeatured` on every call, since
+ * the backend's "most recently approved" pick (see feed.py) could change
+ * mid-day if something new gets approved, and that must not reshuffle
+ * today's already-shown special. Only adopts `freshFeatured` (or accepts
+ * "nothing to feature today") the first time this runs on a new day;
+ * every later call the same day replays whatever was locked in then,
+ * regardless of what the backend now says.  Impure by design — every
+ * caller wants exactly that: "give me today's pick, deciding it now if
+ * today doesn't have one yet." */
+function getStableFeaturedCard(freshFeatured: SeedCard | null): SeedCard | null {
   const today = todayStamp();
-  if (storage.getString(FEATURED_LAST_SHOWN_KEY) === today) return false;
+  if (storage.getString(FEATURED_LAST_SHOWN_KEY) === today) {
+    const cached = storage.getString(FEATURED_CARD_KEY);
+    if (!cached) return null;
+    try {
+      return JSON.parse(cached) as SeedCard;
+    } catch {
+      return null; // corrupted cache entry — treat as "nothing locked in yet today"
+    }
+  }
   storage.set(FEATURED_LAST_SHOWN_KEY, today);
-  return true;
+  if (freshFeatured) {
+    storage.set(FEATURED_CARD_KEY, JSON.stringify(freshFeatured));
+  } else {
+    storage.remove(FEATURED_CARD_KEY);
+  }
+  return freshFeatured;
 }
 
 // Once the in-memory feed grows past this many cards, trim everything more
@@ -41,6 +62,13 @@ interface FeedState {
   isLoading: boolean;
   isLoadingMore: boolean;
   error: string | null;
+  /** False only until the very first loadFeed() call resolves (success
+   * or failure) — distinguishes "genuinely nothing fetched yet" (show
+   * the skeleton) from every later isLoading:true during a pull-to-
+   * refresh (cards already has real content on screen; don't blank it
+   * out again). `cards` itself can't be used for this — it's seeded
+   * with SEED_CARDS before any fetch ever runs, so it's never empty. */
+  hasLoadedOnce: boolean;
   topicFilter: string | null;
   language: Language;
   activeIndex: number;
@@ -136,6 +164,7 @@ export const useFeedStore = create<FeedState>((set, get) => ({
   cards: SEED_CARDS,
   isLoading: false,
   isLoadingMore: false,
+  hasLoadedOnce: false,
   error: null,
   topicFilter: null,
   // Read synchronously at store-creation time (MMKV is sync, unlike the
@@ -185,13 +214,21 @@ export const useFeedStore = create<FeedState>((set, get) => ({
     try {
       const response = await fetchFeed(PAGE_SIZE, 0, topicFilter || undefined);
       if (response.cards && response.cards.length > 0) {
-        // Type 4 — "Today's Special": prepend once per calendar day. The
-        // backend already withholds `featured` for topic-filtered/later
-        // pages, so no need to re-check that here — only whether *this
-        // device* has already shown today's pick.
+        // Type 4 — "Today's Special": one deterministic pick per calendar
+        // day, stable across pull-to-refresh (see getStableFeaturedCard).
+        // The backend already withholds `featured` for topic-filtered/
+        // later pages, so no need to re-check that here.
         let cards = response.cards;
-        if (response.featured && claimFeaturedSlotForToday()) {
-          cards = [{ ...response.featured, isFeatured: true }, ...cards];
+        const featuredToday = getStableFeaturedCard(response.featured ?? null);
+        if (featuredToday) {
+          // Today's locked-in pick may differ from whatever the backend
+          // currently considers "most recent" (see getStableFeaturedCard) —
+          // it could still be present in `cards` under its own steam, so
+          // filter it out before prepending to avoid showing it twice.
+          cards = [
+            { ...featuredToday, isFeatured: true },
+            ...cards.filter((c) => c.id !== featuredToday.id),
+          ];
         }
         set({
           cards,
@@ -218,6 +255,8 @@ export const useFeedStore = create<FeedState>((set, get) => ({
         nextOffset: 0,
         error: err?.message || 'Failed to load live feed',
       });
+    } finally {
+      set({ hasLoadedOnce: true });
     }
   },
 

@@ -17,12 +17,12 @@ import { Colors } from '../../src/theme';
 import { SCREEN_PADDING } from '../../src/theme/spacing';
 import { Language, SeedCard } from '../../src/types';
 import { JinvaniCard } from '../../src/components/JinvaniCard';
+import { JinvaniCardSkeleton } from '../../src/components/JinvaniCardSkeleton';
 import { TopicStrip } from '../../src/components/TopicStrip';
 import { scriptFontFamily } from '../../src/utils/fonts';
+import { CHROME } from '../../src/i18n/chrome';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const LANGUAGES: Language[] = ['en', 'hi', 'gu'];
-const LANG_LABELS: Record<Language, string> = { en: 'EN', hi: 'HI', gu: 'GU' };
 
 // ─── Feed Screen ───────────────────────────────────────────────────────────────
 export default function FeedScreen() {
@@ -34,7 +34,6 @@ export default function FeedScreen() {
 
   const cards = useFeedStore((s) => s.cards);
   const language = useFeedStore((s) => s.language);
-  const setLanguage = useFeedStore((s) => s.setLanguage);
   const topicFilter = useFeedStore((s) => s.topicFilter);
   const setTopic = useFeedStore((s) => s.setTopic);
   const loadMore = useFeedStore((s) => s.loadMore);
@@ -42,6 +41,11 @@ export default function FeedScreen() {
   const isBookMode = useFeedStore((s) => s.isBookMode);
   const bookModeTitle = useFeedStore((s) => s.bookModeTitle);
   const exitBookMode = useFeedStore((s) => s.exitBookMode);
+  const isLoading = useFeedStore((s) => s.isLoading);
+  const hasLoadedOnce = useFeedStore((s) => s.hasLoadedOnce);
+  const error = useFeedStore((s) => s.error);
+  const loadFeed = useFeedStore((s) => s.loadFeed);
+  const t = CHROME[language].feed;
 
   const listRef = useRef<FlashListRef<SeedCard>>(null);
 
@@ -132,68 +136,61 @@ export default function FeedScreen() {
             </Pressable>
           </View>
         ) : (
-          /* Normal mode — language toggle row + topic strip */
-          <>
-            <View style={styles.headerRow}>
-              {/* Spacer left to balance language pills visually */}
-              <View style={styles.headerSpacer} />
-              <View style={[styles.langToggle, {
-                backgroundColor: theme === 'dark' ? 'rgba(28,28,40,0.9)' : 'rgba(255,255,255,0.9)',
-                borderColor: colors.border,
-              }]}>
-                {LANGUAGES.map((lang) => {
-                  const isActive = language === lang;
-                  return (
-                    <Pressable
-                      key={lang}
-                      onPress={() => setLanguage(lang)}
-                      style={[styles.langPill, isActive && { backgroundColor: colors.accent }]}
-                      accessibilityLabel={`Switch to ${LANG_LABELS[lang]} language`}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isActive }}
-                    >
-                      <Text style={[styles.langPillText, {
-                        color: isActive
-                          ? (theme === 'dark' ? '#0A0A0F' : '#FFFFFF')
-                          : colors.textSecondary,
-                        fontWeight: isActive ? '700' : '600',
-                      }]}>
-                        {LANG_LABELS[lang]}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-            <TopicStrip
-              activeTag={topicFilter}
-              onSelect={(tag) => router.setParams({ topic: tag ?? '', focusCard: '' })}
-              language={language}
-              themeMode={theme}
-            />
-          </>
+          /* Normal mode — topic strip. Language switching lives in Profile
+             > Default Language now; this header stays topic-only. */
+          <TopicStrip
+            activeTag={topicFilter}
+            onSelect={(tag) => router.setParams({ topic: tag ?? '', focusCard: '' })}
+            language={language}
+            themeMode={theme}
+          />
         )}
       </View>
 
-      <FlashList
-        ref={listRef}
-        data={cards}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        extraData={extraData}
-        pagingEnabled={true}
-        snapToInterval={SCREEN_HEIGHT}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        showsVerticalScrollIndicator={false}
-        bounces={true}
-        onRefresh={() => useFeedStore.getState().loadFeed()}
-        refreshing={useFeedStore((s) => s.isLoading)}
-        onEndReached={loadMore}
-        onEndReachedThreshold={2}
-        viewabilityConfig={viewabilityConfig}
-        onViewableItemsChanged={onViewableItemsChanged}
-      />
+      {/* Real fetch failure (not the silent SEED_CARDS fallback that's
+          always existed) — cards below still show whatever content is
+          available (live or fallback), this just makes the failure
+          visible instead of pretending everything's fine. */}
+      {error && hasLoadedOnce && (
+        <View style={[styles.errorBanner, { backgroundColor: colors.error, borderColor: colors.error }]}>
+          <Text style={styles.errorBannerText} numberOfLines={2}>
+            {t.loadErrorTitle}
+          </Text>
+          <Pressable
+            onPress={() => loadFeed()}
+            hitSlop={10}
+            style={styles.errorBannerButton}
+            accessibilityRole="button"
+            accessibilityLabel={t.retry}
+          >
+            <Text style={styles.errorBannerButtonText}>{t.retry}</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {isLoading && !hasLoadedOnce ? (
+        <JinvaniCardSkeleton themeMode={theme} screenHeight={SCREEN_HEIGHT} />
+      ) : (
+        <FlashList
+          ref={listRef}
+          data={cards}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          extraData={extraData}
+          pagingEnabled={true}
+          snapToInterval={SCREEN_HEIGHT}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          showsVerticalScrollIndicator={false}
+          bounces={true}
+          onRefresh={() => loadFeed()}
+          refreshing={isLoading}
+          onEndReached={loadMore}
+          onEndReachedThreshold={2}
+          viewabilityConfig={viewabilityConfig}
+          onViewableItemsChanged={onViewableItemsChanged}
+        />
+      )}
     </View>
   );
 }
@@ -205,22 +202,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     paddingBottom: 8,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: SCREEN_PADDING,
-    paddingBottom: 8,
-  },
-  headerSpacer: { flex: 1 },
-  langToggle: {
-    flexDirection: 'row',
-    gap: 4,
-    borderWidth: 1,
-    borderRadius: 24,
-    padding: 3,
-  },
-  langPill: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 18 },
-  langPillText: { fontSize: 11.5, letterSpacing: 0.6 },
   bookModeBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -234,4 +215,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   bookModeBannerText: { flex: 1, fontSize: 12.5 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: SCREEN_PADDING,
+    paddingVertical: 10,
+    zIndex: 9,
+  },
+  errorBannerText: { flex: 1, color: '#FFFFFF', fontSize: 12.5, fontWeight: '600' },
+  errorBannerButton: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)' },
+  errorBannerButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
 });

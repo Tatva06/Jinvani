@@ -27,7 +27,16 @@ mkdir -p "$LOG_DIR"
 : > "$RUN_LOG_FILE"
 echo "$(date '+%Y-%m-%d %H:%M:%S') — starting cloudflared quick tunnel" >> "$LOG_FILE"
 
-cloudflared tunnel --url "http://localhost:${BACKEND_PORT}" --no-autoupdate > >(tee -a "$LOG_FILE" >> "$RUN_LOG_FILE") 2>&1 &
+# --protocol http2 forces TCP transport instead of cloudflared's default
+# QUIC (which runs over UDP). Needed on networks that block/drop outbound
+# UDP (seen on this network — cloudflared's own precheck logs showed
+# "no route to host" / "no recent network activity" specifically on the
+# QUIC dial, while plain TCP/HTTP2 connects fine). --protocol isn't
+# listed in `cloudflared tunnel --help` in this version but is accepted —
+# confirmed via a real connection using it. See README.md's Cloudflare
+# Tunnel section before removing this if a future cloudflared version
+# changes the flag.
+cloudflared tunnel --url "http://localhost:${BACKEND_PORT}" --no-autoupdate --protocol http2 > >(tee -a "$LOG_FILE" >> "$RUN_LOG_FILE") 2>&1 &
 CF_PID=$!
 
 # The assigned https://<random-words>.trycloudflare.com URL is printed to

@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BookOpen, ChevronLeft, Play } from 'lucide-react-native';
+import { BookOpen, ChevronLeft, ExternalLink, Play } from 'lucide-react-native';
 
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
@@ -32,11 +32,11 @@ export default function BookDetailScreen() {
     if (!bookId) return;
     setIsLoading(true);
     setError(null);
-    fetchBook(bookId)
+    fetchBook(bookId, language)
       .then(setBook)
       .catch((err: any) => setError(err?.message || 'Failed to load book'))
       .finally(() => setIsLoading(false));
-  }, [bookId]);
+  }, [bookId, language]);
 
   useEffect(() => {
     load();
@@ -98,7 +98,19 @@ export default function BookDetailScreen() {
               <Text style={[styles.meta, { color: colors.textSecondary, fontFamily: scriptFontFamily(language, '400') }]}>
                 {book.approvedCardCount} {t.library.cardsLabel}
                 {book.decks.length > 1 ? ` · ${book.decks.length} ${t.library.chaptersLabel}` : ''}
+                {' · '}{book.estimatedReadMinutes} {t.library.minRead}
               </Text>
+              {/* Book attribution — null until migration 004 is applied
+                  AND this book has a matching books row (see attribution.py).
+                  Renders nothing at all when every field is absent. */}
+              {(book.authorName || book.rightsNote || book.isPublicDomain) && (
+                <Text style={[styles.attribution, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
+                  {[
+                    book.authorName ? `${t.feed.attributionBy} ${book.authorName}` : null,
+                    book.rightsNote || (book.isPublicDomain ? t.feed.publicDomain : null),
+                  ].filter(Boolean).join(' · ')}
+                </Text>
+              )}
             </View>
           </View>
 
@@ -106,7 +118,7 @@ export default function BookDetailScreen() {
             onPress={() => handleStartReading()}
             style={({ pressed }) => [
               styles.startButton,
-              { backgroundColor: colors.accent },
+              { backgroundColor: colors.accent, marginBottom: book.sourceUrl ? 12 : 32 },
               pressed && { opacity: 0.85 },
             ]}
             accessibilityLabel={`Start reading ${book.title}`}
@@ -117,6 +129,27 @@ export default function BookDetailScreen() {
               {t.library.startReading}
             </Text>
           </Pressable>
+
+          {/* Cleanly absent (not a disabled/dead button) when there's no
+              source_url yet — same null-until-migration contract as the
+              rest of the attribution fields. */}
+          {book.sourceUrl && (
+            <Pressable
+              onPress={() => Linking.openURL(book.sourceUrl!).catch(() => {})}
+              style={({ pressed }) => [
+                styles.readOriginalButton,
+                { borderColor: colors.accentBorder },
+                pressed && { opacity: 0.75 },
+              ]}
+              accessibilityRole="link"
+              accessibilityLabel={t.feed.readCompleteOriginal}
+            >
+              <ExternalLink size={14} color={colors.accent} />
+              <Text style={[styles.readOriginalButtonText, { color: colors.accent }]}>
+                {t.feed.readCompleteOriginal}
+              </Text>
+            </Pressable>
+          )}
 
           {/* Only show the chapter list when there's more than one deck —
               a single-deck book (the common case in the seeded data) would
@@ -173,8 +206,11 @@ const styles = StyleSheet.create({
   iconBox: { width: 56, height: 56, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   title: { ...TYPE.detailTitle, marginBottom: 4 },
   meta: { fontSize: 13 },
-  startButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingVertical: 13, borderRadius: 26, marginBottom: 32, alignSelf: 'flex-start' },
+  attribution: { fontSize: 12, marginTop: 4 },
+  startButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingVertical: 13, borderRadius: 26, marginBottom: 12, alignSelf: 'flex-start' },
   startButtonText: { fontSize: 15, fontWeight: '700' },
+  readOriginalButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, marginBottom: 32, alignSelf: 'flex-start' },
+  readOriginalButtonText: { fontSize: 13, fontWeight: '600' },
   sectionHeader: { ...TYPE.sectionLabel, marginBottom: SPACING.md },
   chapterRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 10, width: '100%' },
   chapterIndex: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

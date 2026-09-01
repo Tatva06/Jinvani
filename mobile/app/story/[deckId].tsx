@@ -41,11 +41,11 @@ export default function StoryPreviewScreen() {
     if (!deckId) return;
     setIsLoading(true);
     setError(null);
-    fetchStory(deckId)
+    fetchStory(deckId, language)
       .then(setStory)
       .catch((err: any) => setError(err?.message || 'Failed to load story'))
       .finally(() => setIsLoading(false));
-  }, [deckId]);
+  }, [deckId, language]);
 
   useEffect(() => {
     load();
@@ -100,7 +100,7 @@ export default function StoryPreviewScreen() {
                 {story.title}
               </Text>
               <Text style={[styles.meta, { color: colors.textSecondary, fontFamily: scriptFontFamily(language, '400') }]}>
-                {story.cardCount} {t.library.cardsLabel}
+                {story.cardCount} {t.library.cardsLabel} · {story.estimatedReadMinutes} {t.library.minRead}
               </Text>
             </View>
           </View>

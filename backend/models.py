@@ -20,6 +20,16 @@ class CardOut(BaseModel):
     # forward, the main feed too) so the client can navigate to a card's
     # book without parsing citation_reference strings.
     book_id: str | None = None
+    # ─── Book attribution (migration 004_book_attribution.sql) ───────────
+    # All None until that migration is applied AND the card's deck has a
+    # matching books row — see attribution.py. Never required; the
+    # attribution footer/"Read Complete Original" action must render
+    # sensibly with any/all of these absent.
+    book_title: str | None = None
+    author_name: str | None = None
+    source_url: str | None = None
+    is_public_domain: bool | None = None
+    rights_note: str | None = None
     deck_sequence_order: int | None = None
 
 
@@ -44,13 +54,18 @@ class DeckOut(BaseModel):
     # client tell a verbatim deck, a narrative ("story") deck, and a
     # regular concept/verse deck apart without a second round-trip.
     card_types: list[str] = []
+    # Word-count-derived, computed fresh per request — never stored. See
+    # attribution.estimate_read_minutes.
+    estimated_read_minutes: int = 0
 
 
 class BookOut(BaseModel):
     book_id: str
-    # There is no books table / books.title column — the schema only has
-    # decks.book_id (a bare TEXT, no FK). This is the lowest-sequence_order
-    # deck's title, used as a readable stand-in for a proper book title.
+    # As of migration 003 there WAS no books table; as of 004 there is
+    # one (hand-created in the Supabase dashboard, now linked via
+    # decks.book_id_ref) but it may still have no matching row for this
+    # book_id, or the migration may not be applied yet. Falls back to the
+    # lowest-sequence_order deck's title as a readable stand-in either way.
     title: str
     decks: list[DeckOut]
     approved_card_count: int
@@ -58,6 +73,13 @@ class BookOut(BaseModel):
     # whether "Start Reading" should launch verbatim continuous-reading
     # mode instead of the normal all-approved-cards book order.
     card_types: list[str] = []
+    estimated_read_minutes: int = 0
+    # ─── Book attribution (migration 004_book_attribution.sql) — see
+    # CardOut's identical fields for the null-until-applied contract. ───
+    author_name: str | None = None
+    source_url: str | None = None
+    is_public_domain: bool | None = None
+    rights_note: str | None = None
 
 
 class BooksResponse(BaseModel):
@@ -72,6 +94,7 @@ class StoryOut(BaseModel):
     book_id: str
     title: str
     card_count: int
+    estimated_read_minutes: int = 0
 
 
 class StoryDetailOut(StoryOut):

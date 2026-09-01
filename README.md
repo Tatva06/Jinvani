@@ -72,3 +72,13 @@ After any restart the URL changes — give the Expo app a reload (it reads `cons
 dig @1.1.1.1 +short "$(grep '^export const API_BASE_URL' mobile/src/constants.ts | sed -E "s/.*'(.*)'.*/\1/" | sed -E 's#https://##')"
 ```
 If that resolves but a plain `curl`/the app doesn't, it's this quirk — wait a few minutes, or (more permanently) add `1.1.1.1` as a DNS server on this Mac's active network interface.
+
+**Known issue — this network blocks cloudflared's edge port (7844) outright.** cloudflared's tunnel connection (both its default QUIC/UDP transport *and* the HTTP2/TCP fallback) only ever dials out on port 7844 — there's no port-443 fallback in the open-source client. `scripts/cloudflared-tunnel.sh` already passes `--protocol http2` to force TCP instead of QUIC, which is enough on networks that only block outbound UDP. It is **not** enough on a network that blocks port 7844 for both TCP and UDP — confirmed on the hotspot this was diagnosed on: `cloudflared`'s own precheck reported `TCP Connectivity ... FAIL HTTP/2 connection is blocked or unreachable` alongside the QUIC failure, and the tunnel logged repeated `dial tcp <edge-ip>:7844: i/o timeout` across a dozen+ different Cloudflare edge IPs over several minutes — not a transient blip.
+
+How to tell which case you're in:
+
+```bash
+tail -n 40 ~/Library/Logs/jinvani-cloudflared/cloudflared.log
+```
+- Only `UDP Connectivity ... FAIL` (TCP passes) → `--protocol http2` (already set) is the actual fix; just let the service restart.
+- Both `UDP Connectivity ... FAIL` **and** `TCP Connectivity ... FAIL` (or repeated `dial tcp ...:7844: i/o timeout` even with the protocol flag in place) → this network blocks port 7844 entirely. No cloudflared quick-tunnel flag fixes this — the backend is unreachable from any device other than this Mac until you're on a different network (switch off the hotspot, use a wired/other Wi-Fi connection, or a VPN that doesn't also block 7844). Confirm the backend itself is fine independently of all this with `curl http://localhost:8000/api/v1/books` before assuming anything is broken in the app or backend.

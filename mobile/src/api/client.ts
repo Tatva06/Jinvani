@@ -26,6 +26,11 @@ function mapCard(c: any): SeedCard {
     originalVerse: c.original_verse || c.originalVerse,
     bookId: c.book_id ?? c.bookId,
     deckSequenceOrder: c.deck_sequence_order ?? c.deckSequenceOrder,
+    bookTitle: c.book_title ?? null,
+    authorName: c.author_name ?? null,
+    sourceUrl: c.source_url ?? null,
+    isPublicDomain: c.is_public_domain ?? null,
+    rightsNote: c.rights_note ?? null,
   };
 }
 
@@ -35,6 +40,11 @@ function mapBook(b: any): Book {
     title: b.title,
     approvedCardCount: b.approved_card_count,
     cardTypes: b.card_types || [],
+    estimatedReadMinutes: b.estimated_read_minutes ?? 0,
+    authorName: b.author_name ?? null,
+    sourceUrl: b.source_url ?? null,
+    isPublicDomain: b.is_public_domain ?? null,
+    rightsNote: b.rights_note ?? null,
     decks: (b.decks || []).map((d: any) => ({
       id: d.id,
       title: d.title,
@@ -42,6 +52,7 @@ function mapBook(b: any): Book {
       topicTag: d.topic_tag ?? null,
       approvedCardCount: d.approved_card_count,
       cardTypes: d.card_types || [],
+      estimatedReadMinutes: d.estimated_read_minutes ?? 0,
     })),
   };
 }
@@ -52,6 +63,7 @@ function mapStory(s: any): Story {
     bookId: s.book_id,
     title: s.title,
     cardCount: s.card_count,
+    estimatedReadMinutes: s.estimated_read_minutes ?? 0,
   };
 }
 
@@ -106,8 +118,10 @@ export async function searchCards(
   };
 }
 
-export async function fetchBooks(): Promise<Book[]> {
-  const res = await fetch(`${API_V1}/books`, { headers: FETCH_HEADERS });
+export async function fetchBooks(lang: Language = 'en'): Promise<Book[]> {
+  const url = new URL(`${API_V1}/books`);
+  url.searchParams.set('lang', lang);
+  const res = await fetch(url.toString(), { headers: FETCH_HEADERS });
   if (!res.ok) {
     throw new Error(`Failed to fetch books: ${res.status} ${res.statusText}`);
   }
@@ -115,8 +129,10 @@ export async function fetchBooks(): Promise<Book[]> {
   return (data.books || []).map(mapBook);
 }
 
-export async function fetchBook(bookId: string): Promise<Book> {
-  const res = await fetch(`${API_V1}/books/${encodeURIComponent(bookId)}`, { headers: FETCH_HEADERS });
+export async function fetchBook(bookId: string, lang: Language = 'en'): Promise<Book> {
+  const url = new URL(`${API_V1}/books/${encodeURIComponent(bookId)}`);
+  url.searchParams.set('lang', lang);
+  const res = await fetch(url.toString(), { headers: FETCH_HEADERS });
   if (!res.ok) {
     throw new Error(`Failed to fetch book: ${res.status} ${res.statusText}`);
   }
@@ -140,8 +156,10 @@ export async function fetchBookCards(bookId: string, deckId?: string, cardType?:
   return { cards, count: data.count ?? cards.length };
 }
 
-export async function fetchStories(): Promise<Story[]> {
-  const res = await fetch(`${API_V1}/stories`, { headers: FETCH_HEADERS });
+export async function fetchStories(lang: Language = 'en'): Promise<Story[]> {
+  const url = new URL(`${API_V1}/stories`);
+  url.searchParams.set('lang', lang);
+  const res = await fetch(url.toString(), { headers: FETCH_HEADERS });
   if (!res.ok) {
     throw new Error(`Failed to fetch stories: ${res.status} ${res.statusText}`);
   }
@@ -149,8 +167,10 @@ export async function fetchStories(): Promise<Story[]> {
   return (data.stories || []).map(mapStory);
 }
 
-export async function fetchStory(deckId: string): Promise<StoryDetail> {
-  const res = await fetch(`${API_V1}/stories/${encodeURIComponent(deckId)}`, { headers: FETCH_HEADERS });
+export async function fetchStory(deckId: string, lang: Language = 'en'): Promise<StoryDetail> {
+  const url = new URL(`${API_V1}/stories/${encodeURIComponent(deckId)}`);
+  url.searchParams.set('lang', lang);
+  const res = await fetch(url.toString(), { headers: FETCH_HEADERS });
   if (!res.ok) {
     throw new Error(`Failed to fetch story: ${res.status} ${res.statusText}`);
   }

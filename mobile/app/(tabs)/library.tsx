@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BookOpenText, ChevronRight } from 'lucide-react-native';
+import { BookOpenText, ChevronRight, LibraryBig } from 'lucide-react-native';
 
 import { useThemeStore } from '../../src/store/useThemeStore';
 import { useFeedStore } from '../../src/store/useFeedStore';
@@ -13,6 +13,85 @@ import { CHROME } from '../../src/i18n/chrome';
 import { scriptFontFamily } from '../../src/utils/fonts';
 import { fetchBooks, fetchStories } from '../../src/api/client';
 import { Book, Story } from '../../src/types';
+
+type TimeBucket = 'all' | 'under5' | '5to15' | 'over15';
+
+// Boundaries per the original ask (Under 5 / 5-15 / 15+). The current
+// dev dataset's real books/stories all land under 5 min (single-digit
+// card counts), so there's no real distribution yet to justify shifting
+// these — kept as the reasonable, commonly-understood defaults rather
+// than over-fitting to a dataset that's still this small.
+function matchesBucket(minutes: number, bucket: TimeBucket): boolean {
+  switch (bucket) {
+    case 'under5': return minutes < 5;
+    case '5to15': return minutes >= 5 && minutes <= 15;
+    case 'over15': return minutes > 15;
+    default: return true;
+  }
+}
+
+function TimeFilterRow({
+  active,
+  onSelect,
+  colors,
+  themeMode,
+  t,
+}: {
+  active: TimeBucket;
+  onSelect: (b: TimeBucket) => void;
+  colors: (typeof Colors)['dark'];
+  themeMode: 'dark' | 'light';
+  t: (typeof CHROME)['en'];
+}) {
+  const options: { key: TimeBucket; label: string }[] = [
+    { key: 'all', label: t.library.timeFilterAll },
+    { key: 'under5', label: t.library.timeFilterUnder5 },
+    { key: '5to15', label: t.library.timeFilter5to15 },
+    { key: 'over15', label: t.library.timeFilterOver15 },
+  ];
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.timeFilterScroll}
+      contentContainerStyle={styles.timeFilterRow}
+    >
+      {options.map((opt) => {
+        const isActive = active === opt.key;
+        return (
+          <Pressable
+            key={opt.key}
+            onPress={() => onSelect(opt.key)}
+            style={[styles.timeChip, {
+              backgroundColor: isActive ? colors.chipActiveBg : colors.chipBg,
+              borderColor: isActive ? colors.chipActiveBg : colors.chipBorder,
+            }]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={opt.label}
+          >
+            <Text style={[styles.timeChipText, {
+              color: isActive ? (themeMode === 'dark' ? '#0A0A0F' : '#FFFFFF') : colors.text,
+              fontWeight: isActive ? '700' : '500',
+            }]}>
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+function EmptyFilteredState({ colors, t }: { colors: (typeof Colors)['dark']; t: (typeof CHROME)['en'] }) {
+  return (
+    <View style={styles.emptyFiltered}>
+      <LibraryBig size={32} color={colors.textMuted} />
+      <Text style={[styles.emptyFilteredTitle, { color: colors.text }]}>{t.library.emptyFilteredTitle}</Text>
+      <Text style={[styles.emptyFilteredSubtitle, { color: colors.textMuted }]}>{t.library.emptyFilteredSubtitle}</Text>
+    </View>
+  );
+}
 
 // Stories (Type 5 / narrative) live as a section within this same Library
 // screen rather than a separate tab or list: they're browsed the same
@@ -54,7 +133,7 @@ function StoriesSection({
                 { backgroundColor: colors.surface, borderColor: colors.border },
                 pressed && { opacity: 0.75 },
               ]}
-              accessibilityLabel={`Open story: ${story.title}, ${story.cardCount} cards`}
+              accessibilityLabel={`Open story: ${story.title}, ${story.cardCount} cards, ${story.estimatedReadMinutes} ${t.library.minRead}`}
               accessibilityRole="button"
             >
               <BookOpenText size={20} color={colors.accent} />
@@ -62,7 +141,7 @@ function StoriesSection({
                 {story.title}
               </Text>
               <Text style={[styles.storyMeta, { color: colors.textSecondary, fontFamily: scriptFontFamily(language, '400') }]}>
-                {story.cardCount} {t.library.cardsLabel}
+                {story.cardCount} {t.library.cardsLabel} · {story.estimatedReadMinutes} {t.library.minRead}
               </Text>
             </Pressable>
           ))}
@@ -84,22 +163,34 @@ export default function LibraryScreen() {
   const [stories, setStories] = useState<Story[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timeBucket, setTimeBucket] = useState<TimeBucket>('all');
 
   const load = useCallback(() => {
     setIsLoading(true);
     setError(null);
-    Promise.all([fetchBooks(), fetchStories()])
+    Promise.all([fetchBooks(language), fetchStories(language)])
       .then(([b, s]) => {
         setBooks(b);
         setStories(s);
       })
       .catch((err: any) => setError(err?.message || 'Failed to load library'))
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const filteredBooks = useMemo(
+    () => books.filter((b) => matchesBucket(b.estimatedReadMinutes, timeBucket)),
+    [books, timeBucket]
+  );
+  const filteredStories = useMemo(
+    () => stories.filter((s) => matchesBucket(s.estimatedReadMinutes, timeBucket)),
+    [stories, timeBucket]
+  );
+  const nothingMatchesFilter =
+    timeBucket !== 'all' && filteredBooks.length === 0 && filteredStories.length === 0;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -118,19 +209,27 @@ export default function LibraryScreen() {
         <Text style={[styles.errorText, { color: colors.textMuted, fontFamily: scriptFontFamily(language, '400') }]}>
           {error}
         </Text>
+      ) : nothingMatchesFilter ? (
+        <>
+          <TimeFilterRow active={timeBucket} onSelect={setTimeBucket} colors={colors} themeMode={theme} t={t} />
+          <EmptyFilteredState colors={colors} t={t} />
+        </>
       ) : (
         <FlatList
-          data={books}
+          data={filteredBooks}
           keyExtractor={(b) => b.bookId}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 40 }]}
           ListHeaderComponent={
-            <StoriesSection
-              stories={stories}
-              colors={colors}
-              language={language}
-              t={t}
-              onSelect={(story) => router.push({ pathname: '/story/[deckId]', params: { deckId: story.deckId } })}
-            />
+            <>
+              <TimeFilterRow active={timeBucket} onSelect={setTimeBucket} colors={colors} themeMode={theme} t={t} />
+              <StoriesSection
+                stories={filteredStories}
+                colors={colors}
+                language={language}
+                t={t}
+                onSelect={(story) => router.push({ pathname: '/story/[deckId]', params: { deckId: story.deckId } })}
+              />
+            </>
           }
           renderItem={({ item, index }) => {
             const topicTag = item.decks.find((d) => d.topicTag)?.topicTag;
@@ -161,6 +260,7 @@ export default function LibraryScreen() {
                   <Text style={[styles.bookMeta, { color: colors.textSecondary, fontFamily: scriptFontFamily(language, '400') }]}>
                     {item.approvedCardCount} {t.library.cardsLabel}
                     {item.decks.length > 1 ? ` · ${item.decks.length} ${t.library.chaptersLabel}` : ''}
+                    {' · '}{item.estimatedReadMinutes} {t.library.minRead}
                   </Text>
                   {topicTag && (
                     <View style={[styles.chip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}>
@@ -186,6 +286,18 @@ const styles = StyleSheet.create({
   centerBlock: { marginTop: 40 },
   errorText: { fontSize: 13, paddingHorizontal: SCREEN_PADDING, marginTop: 20 },
   listContent: { paddingHorizontal: SCREEN_PADDING, gap: 10 },
+  // flexGrow:0 here matters specifically when this renders outside
+  // FlatList's ListHeaderComponent (the nothingMatchesFilter branch) —
+  // as a direct child of the flex:1 column root there, an unstyled
+  // horizontal ScrollView otherwise stretches to fill all remaining
+  // vertical space instead of sizing to its own row of chips.
+  timeFilterScroll: { flexGrow: 0 },
+  timeFilterRow: { gap: SPACING.sm, paddingBottom: 14 },
+  timeChip: { paddingHorizontal: SPACING.sm, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
+  timeChipText: { fontSize: 12, letterSpacing: 0.2 },
+  emptyFiltered: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 60, paddingHorizontal: SCREEN_PADDING },
+  emptyFilteredTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  emptyFilteredSubtitle: { fontSize: 13, textAlign: 'center' },
   bookRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 16, borderWidth: 1 },
   iconBox: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   iconNumber: { fontSize: 16, fontWeight: '800' },

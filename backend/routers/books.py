@@ -22,6 +22,16 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from attribution import (
+    CARDS_WITH_BOOK_SELECT,
+    CARDS_BASE_SELECT,
+    DECKS_WITH_BOOK_SELECT,
+    DECKS_BASE_SELECT,
+    attach_book_fields,
+    book_fields_from_embed,
+    estimate_read_minutes,
+    select_with_book_fallback,
+)
 from models import (
     BookOut,
     BooksResponse,
@@ -40,15 +50,16 @@ NARRATIVE_CARD_TYPE = "narrative"
 
 
 async def _fetch_decks_and_approved_cards(supabase) -> tuple[list[dict], list[dict]]:
-    decks = (
-        await supabase.table("decks")
-        .select("id, book_id, sequence_order, title, topic_tag")
-        .execute()
-    ).data or []
+    decks = await select_with_book_fallback(
+        lambda: supabase.table("decks").select(DECKS_WITH_BOOK_SELECT).execute(),
+        lambda: supabase.table("decks").select(DECKS_BASE_SELECT).execute(),
+    )
 
+    # `content` is needed here (not just deck_id/card_type) so book/deck
+    # read-time estimates can be computed below — see estimate_read_minutes.
     cards = (
         await supabase.table("cards")
-        .select("deck_id, card_type")
+        .select("deck_id, card_type, content")
         .eq("status", "approved")
         .execute()
     ).data or []
@@ -56,19 +67,25 @@ async def _fetch_decks_and_approved_cards(supabase) -> tuple[list[dict], list[di
     return decks, cards
 
 
-def _summarize_cards_by_deck(cards: list[dict]) -> tuple[dict[str, int], dict[str, set[str]]]:
+def _summarize_cards_by_deck(
+    cards: list[dict],
+) -> tuple[dict[str, int], dict[str, set[str]], dict[str, list[dict]]]:
     approved_by_deck: dict[str, int] = defaultdict(int)
     card_types_by_deck: dict[str, set[str]] = defaultdict(set)
+    contents_by_deck: dict[str, list[dict]] = defaultdict(list)
     for c in cards:
         approved_by_deck[c["deck_id"]] += 1
         card_types_by_deck[c["deck_id"]].add(c["card_type"])
-    return approved_by_deck, card_types_by_deck
+        contents_by_deck[c["deck_id"]].append(c["content"])
+    return approved_by_deck, card_types_by_deck, contents_by_deck
 
 
 def _group_into_books(
     decks: list[dict],
     approved_by_deck: dict[str, int],
     card_types_by_deck: dict[str, set[str]],
+    contents_by_deck: dict[str, list[dict]],
+    lang: str = "en",
 ) -> list[BookOut]:
     by_book: dict[str, list[dict]] = defaultdict(list)
     for d in decks:
@@ -85,6 +102,9 @@ def _group_into_books(
                 topic_tag=d.get("topic_tag"),
                 approved_card_count=approved_by_deck.get(d["id"], 0),
                 card_types=sorted(card_types_by_deck.get(d["id"], set())),
+                estimated_read_minutes=estimate_read_minutes(
+                    contents_by_deck.get(d["id"], []), lang
+                ),
             )
             for d in deck_rows_sorted
         ]
@@ -97,16 +117,28 @@ def _group_into_books(
         # title as a readable stand-in.
         title = deck_outs[0].title
         book_card_types = sorted({ct for d in deck_outs for ct in d.card_types})
+        book_minutes = sum(d.estimated_read_minutes for d in deck_outs)
+        # All decks in a book share the same book_id_ref, so the first
+        # deck's embedded `books` (if any) speaks for the whole book.
+        book_fields = book_fields_from_embed(deck_rows_sorted[0].get("books"))
         books.append(BookOut(
             book_id=book_id, title=title, decks=deck_outs,
             approved_card_count=total, card_types=book_card_types,
+            estimated_read_minutes=book_minutes,
+            author_name=book_fields["author_name"],
+            source_url=book_fields["source_url"],
+            is_public_domain=book_fields["is_public_domain"],
+            rights_note=book_fields["rights_note"],
         ))
 
     return books
 
 
 @router.get("/books", response_model=BooksResponse, summary="List all books with approved cards")
-async def list_books(request: Request) -> BooksResponse:
+async def list_books(
+    request: Request,
+    lang: str = Query(default="en", description="Language for the estimated-read-time word count (en/hi/gu)."),
+) -> BooksResponse:
     from main import state
 
     try:
@@ -115,8 +147,8 @@ async def list_books(request: Request) -> BooksResponse:
         logger.exception("Supabase query failed for /books")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Books fetch failed.") from exc
 
-    approved_by_deck, card_types_by_deck = _summarize_cards_by_deck(cards)
-    books = _group_into_books(decks, approved_by_deck, card_types_by_deck)
+    approved_by_deck, card_types_by_deck, contents_by_deck = _summarize_cards_by_deck(cards)
+    books = _group_into_books(decks, approved_by_deck, card_types_by_deck, contents_by_deck, lang)
     books.sort(key=lambda b: b.title.lower())
 
     logger.info("Books served %d books", len(books))
@@ -124,7 +156,11 @@ async def list_books(request: Request) -> BooksResponse:
 
 
 @router.get("/books/{book_id}", response_model=BookOut, summary="Get one book's decks/chapters")
-async def get_book(request: Request, book_id: str) -> BookOut:
+async def get_book(
+    request: Request,
+    book_id: str,
+    lang: str = Query(default="en", description="Language for the estimated-read-time word count (en/hi/gu)."),
+) -> BookOut:
     from main import state
 
     try:
@@ -137,8 +173,8 @@ async def get_book(request: Request, book_id: str) -> BookOut:
     if not decks_for_book:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found.")
 
-    approved_by_deck, card_types_by_deck = _summarize_cards_by_deck(cards)
-    books = _group_into_books(decks_for_book, approved_by_deck, card_types_by_deck)
+    approved_by_deck, card_types_by_deck, contents_by_deck = _summarize_cards_by_deck(cards)
+    books = _group_into_books(decks_for_book, approved_by_deck, card_types_by_deck, contents_by_deck, lang)
     if not books:
         # Decks exist for this book_id, but none have any approved cards.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found.")
@@ -182,15 +218,21 @@ async def get_book_cards(
         deck_info_by_id: dict[str, dict] = {d["id"]: d for d in deck_rows}
         deck_ids = list(deck_order.keys())
 
-        cards_query = (
-            state.supabase.table("cards")
-            .select("*")
-            .eq("status", "approved")
-            .in_("deck_id", deck_ids)
+        def build_cards_query(select: str):
+            q = (
+                state.supabase.table("cards")
+                .select(select)
+                .eq("status", "approved")
+                .in_("deck_id", deck_ids)
+            )
+            if card_type:
+                q = q.eq("card_type", card_type)
+            return q.execute()
+
+        card_rows = await select_with_book_fallback(
+            lambda: build_cards_query(CARDS_WITH_BOOK_SELECT),
+            lambda: build_cards_query(CARDS_BASE_SELECT),
         )
-        if card_type:
-            cards_query = cards_query.eq("card_type", card_type)
-        card_rows = (await cards_query.execute()).data or []
     except HTTPException:
         raise
     except Exception as exc:
@@ -205,6 +247,11 @@ async def get_book_cards(
 
     cards = []
     for row in card_rows:
+        # book_id_ref-embedded fields (if present) live under row["decks"],
+        # which the *_WITH_BOOK_SELECT query embeds directly on the card
+        # row (unlike deck_info_by_id below, which is this endpoint's own
+        # separate top-level deck fetch for ordering).
+        attach_book_fields(row)
         deck_info = deck_info_by_id.get(row["deck_id"])
         if deck_info:
             row["deck_title"] = deck_info.get("title")
@@ -220,7 +267,10 @@ async def get_book_cards(
 
 
 @router.get("/stories", response_model=StoriesResponse, summary="List narrative decks ('stories') with approved cards")
-async def list_stories(request: Request) -> StoriesResponse:
+async def list_stories(
+    request: Request,
+    lang: str = Query(default="en", description="Language for the estimated-read-time word count (en/hi/gu)."),
+) -> StoriesResponse:
     from main import state
 
     try:
@@ -229,7 +279,7 @@ async def list_stories(request: Request) -> StoriesResponse:
         logger.exception("Supabase query failed for /stories")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Stories fetch failed.") from exc
 
-    approved_by_deck, card_types_by_deck = _summarize_cards_by_deck(cards)
+    approved_by_deck, card_types_by_deck, contents_by_deck = _summarize_cards_by_deck(cards)
     deck_by_id = {d["id"]: d for d in decks}
 
     stories = [
@@ -238,6 +288,7 @@ async def list_stories(request: Request) -> StoriesResponse:
             book_id=deck_by_id[deck_id]["book_id"],
             title=deck_by_id[deck_id]["title"],
             card_count=approved_by_deck[deck_id],
+            estimated_read_minutes=estimate_read_minutes(contents_by_deck.get(deck_id, []), lang),
         )
         for deck_id, types in card_types_by_deck.items()
         # A deck counts as a "story" if it has any narrative cards at all —
@@ -252,7 +303,11 @@ async def list_stories(request: Request) -> StoriesResponse:
 
 
 @router.get("/stories/{deck_id}", response_model=StoryDetailOut, summary="Get one story's preview (title, card count, first card)")
-async def get_story(request: Request, deck_id: str) -> StoryDetailOut:
+async def get_story(
+    request: Request,
+    deck_id: str,
+    lang: str = Query(default="en", description="Language for the estimated-read-time word count (en/hi/gu)."),
+) -> StoryDetailOut:
     from main import state
 
     try:
@@ -267,15 +322,14 @@ async def get_story(request: Request, deck_id: str) -> StoryDetailOut:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Story not found.")
         deck_row = deck_rows[0]
 
-        card_rows = (
-            await state.supabase.table("cards")
-            .select("*")
-            .eq("deck_id", deck_id)
-            .eq("status", "approved")
-            .eq("card_type", NARRATIVE_CARD_TYPE)
-            .order("sequence_order", desc=False)
-            .execute()
-        ).data or []
+        card_rows = await select_with_book_fallback(
+            lambda: state.supabase.table("cards").select(CARDS_WITH_BOOK_SELECT)
+                .eq("deck_id", deck_id).eq("status", "approved")
+                .eq("card_type", NARRATIVE_CARD_TYPE).order("sequence_order", desc=False).execute(),
+            lambda: state.supabase.table("cards").select(CARDS_BASE_SELECT)
+                .eq("deck_id", deck_id).eq("status", "approved")
+                .eq("card_type", NARRATIVE_CARD_TYPE).order("sequence_order", desc=False).execute(),
+        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -285,7 +339,7 @@ async def get_story(request: Request, deck_id: str) -> StoryDetailOut:
     if not card_rows:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Story has no approved narrative cards.")
 
-    first_row = dict(card_rows[0])
+    first_row = attach_book_fields(dict(card_rows[0]))
     first_row["deck_title"] = deck_row.get("title")
     first_row["book_id"] = deck_row.get("book_id")
     first_row["deck_sequence_order"] = deck_row.get("sequence_order")
@@ -295,5 +349,6 @@ async def get_story(request: Request, deck_id: str) -> StoryDetailOut:
         book_id=deck_row["book_id"],
         title=deck_row["title"],
         card_count=len(card_rows),
+        estimated_read_minutes=estimate_read_minutes([c["content"] for c in card_rows], lang),
         preview_card=CardOut(**first_row),
     )
